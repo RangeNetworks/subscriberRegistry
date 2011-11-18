@@ -5,4 +5,7 @@ INSERT INTO "CONFIG" VALUES('Log.Alarms.Max','20',0,0,'Maximum number of alarms 
 INSERT INTO "CONFIG" VALUES('Log.Level','WARNING',0,0,'Default logging level when no other level is defined for a file.');
 INSERT INTO "CONFIG" VALUES('SubscriberRegistry.db','/var/lib/asterisk/sqlite3dir/sqlite3.db',0,0,'The location of the sqlite3 database holding the subscriber registry.');
 INSERT INTO "CONFIG" VALUES('SubscriberRegistry.Port','5064',0,0,'The port for the subscriber registry. Static.');
+-- following two are only used by srmanager, which is not built be default
+--INSERT INTO "CONFIG" VALUES('SubscriberRegistry.Manager.Title','No Idea',0,0,'No idea what this is supposed to be -kurtis');
+--INSERT INTO "CONFIG" VALUES('SubscriberRegistry.Manager.VisibleColumns','No Idea',0,0,'No idea what this is supposed to be');
 COMMIT;
