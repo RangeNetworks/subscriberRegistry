@@ -50,7 +50,7 @@
 
 using namespace std;
 
-ConfigurationTable gConfig("/etc/OpenBTS/OpenBTS.db");
+ConfigurationTable gConfig("/etc/OpenBTS/sipauthserve.db");
 
 int my_udp_port;
 
