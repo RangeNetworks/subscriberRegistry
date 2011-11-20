@@ -144,8 +144,6 @@ static const char* createSBTable = {
 		"sres                  varchar(33) default '', "
 		"ki                    varchar(33) default '', "
 		"kc                    varchar(33) default '', "
-		"prepaid               int(1) DEFAULT 0 not null, "
-		"secondsRemaining      int(11) DEFAULT 0 not null, "
 		"RRLPSupported         int(1) default 1 not null, "
 		"regTime               INTEGER default 0 NOT NULL, " // Unix time of most recent registration
 		"a3_a8                 varchar(45) default NULL"
