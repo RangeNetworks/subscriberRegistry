@@ -213,6 +213,7 @@ main(int argc, char **argv)
 	LOG(ALERT) << argv[0] << " (re)starting";
 	srand ( time(NULL) + (int)getpid() );
 	my_udp_port = gConfig.getNum("SubscriberRegistry.Port");
+	gSubscriberRegistry.init();
 
 	// init osip lib
 	osip_t *osip;

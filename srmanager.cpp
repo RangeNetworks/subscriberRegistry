@@ -237,7 +237,7 @@ void endHtml()
 int main(int argc, char **argv)
 {
 	gLogInit("srmanager",gConfig.getStr("Log.Level").c_str(),LOG_LOCAL7);
-	gSubscriberRegistry = SubscriberRegistry();
+	gSubscriberRegistry.init();
 	// start the html return
 	initHtml();
 	// read the config file

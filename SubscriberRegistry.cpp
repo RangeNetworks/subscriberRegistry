@@ -152,7 +152,7 @@ static const char* createSBTable = {
 };
 
 
-SubscriberRegistry::SubscriberRegistry()
+int SubscriberRegistry::init()
 {
 	string ldb = gConfig.getStr("SubscriberRegistry.db");
 	int rc = sqlite3_open(ldb.c_str(),&mDB);
@@ -160,23 +160,28 @@ SubscriberRegistry::SubscriberRegistry()
 		LOG(EMERG) << "Cannot open SubscriberRegistry database: " << sqlite3_errmsg(mDB);
 		sqlite3_close(mDB);
 		mDB = NULL;
-		return;
+		return 1;
 	}
     if (!sqlite3_command(mDB,createRRLPTable)) {
         LOG(EMERG) << "Cannot create RRLP table";
+        return 1;
     }
     if (!sqlite3_command(mDB,createDDTable)) {
         LOG(EMERG) << "Cannot create DIALDATA_TABLE table";
+        return 1;
     }
     if (!sqlite3_command(mDB,createSBTable)) {
         LOG(EMERG) << "Cannot create SIP_BUDDIES table";
+        return 1;
     }
 	if (!getCLIDLocal("IMSI001010000000000")) {
 		// This is a test SIM provided with the BTS.
 		if (addUser("IMSI001010000000000", "2100") != SUCCESS) {
 			LOG(EMERG) << "Cannot insert test SIM";
+            return 1;
 		}
 	}
+    return 0;
 }
 
 
