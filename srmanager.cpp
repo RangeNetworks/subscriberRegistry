@@ -39,7 +39,7 @@
 
 using namespace std;
 
-ConfigurationTable gConfig("/etc/OpenBTS/OpenBTS.db");
+ConfigurationTable gConfig("/etc/OpenBTS/sipauthserve.db");
 map<string,string> gArgs;
 string gDatabase;
 string gVisibleSipColumns;
@@ -238,12 +238,12 @@ int main(int argc, char **argv)
 {
 	gLogInit("srmanager",gConfig.getStr("Log.Level").c_str(),LOG_LOCAL7);
 	gSubscriberRegistry.init();
-	// start the html return
-	initHtml();
 	// read the config file
 	gVisibleSipColumns = gConfig.getStr("SubscriberRegistry.Manager.VisibleColumns");
 	gUrl = argv[0];
 	gTitle = gConfig.getStr("SubscriberRegistry.Manager.Title");
+	// start the html return
+	initHtml();
 	// connect to the database
 	gDatabase = gConfig.getStr("SubscriberRegistry.db");
 	// decode the http query
