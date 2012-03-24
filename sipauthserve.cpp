@@ -154,6 +154,9 @@ char *processBuffer(char *buffer)
 	osip_from_t * contact_header = (osip_from_t*)osip_list_get(&sip->contacts,0);
 	osip_uri_t* contact_url = contact_header->url; 
 	char *remote_host = contact_url->host;
+	//char *remote_port = contact_url->port;
+	//this is an smqueue hack, will not be needed with FS -kurtis
+	char *remote_port = "5062";
 
 	// return via
 	ostringstream newvia;
@@ -179,9 +182,9 @@ char *processBuffer(char *buffer)
 		osip_message_set_status_code (response, 200);
 		osip_message_set_reason_phrase (response, osip_strdup("OK"));
 		// And register it.
-		LOG(INFO) << "success, registering for IP address " << remote_host;
+		LOG(INFO) << "success, registering for IP address " << remote_host << ":" << remote_port;
 		imsiSet(imsi,"ipaddr",remote_host);
-		imsiSet(imsi,"port","5062");
+		imsiSet(imsi,"port",remote_port);
 	}
 
 	prettyPrint("response", response);
