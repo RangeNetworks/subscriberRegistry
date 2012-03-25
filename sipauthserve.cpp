@@ -154,9 +154,7 @@ char *processBuffer(char *buffer)
 	osip_from_t * contact_header = (osip_from_t*)osip_list_get(&sip->contacts,0);
 	osip_uri_t* contact_url = contact_header->url; 
 	char *remote_host = contact_url->host;
-	//char *remote_port = contact_url->port;
-	//this is an smqueue hack, will not be needed with FS -kurtis
-	char *remote_port = "5062";
+	char *remote_port = contact_url->port;
 
 	// return via
 	ostringstream newvia;
