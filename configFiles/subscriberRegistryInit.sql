@@ -92,8 +92,8 @@ ki                    varchar(33) default '',
 kc                    varchar(33) default '',
 RRLPSupported         int(1) default 1 not null,
 hardware	      VARCHAR(20),
-regTime               INTEGER default 0 NOT NULL"
-a3_a8                 varchar(45) default NULL
+regTime               INTEGER default 0 NOT NULL",
+a3_a8                 varchar(45) default NULL,
 primary key(id)
 ) 
 ;
