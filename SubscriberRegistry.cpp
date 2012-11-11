@@ -1,6 +1,6 @@
 /*
 * Copyright 2011 Kestrel Signal Processing, Inc.
-* Copyright 2011 Range Networks, Inc.
+* Copyright 2011,2012 Range Networks, Inc.
 *
 * This software is distributed under the terms of the GNU Affero Public License.
 * See the COPYING file in the main directory for details.
@@ -54,8 +54,8 @@ static const char* createRRLPTable = {
 static const char* createDDTable = {
     "CREATE TABLE IF NOT EXISTS DIALDATA_TABLE ("
 		"id				INTEGER PRIMARY KEY, "
-		"exten           VARCHAR(40)     NOT NULL        DEFAULT '', "
-		"dial			VARCHAR(128)    NOT NULL        DEFAULT '' "
+               "exten           VARCHAR(40)     UNIQUE NOT NULL, "
+               "dial                   VARCHAR(128)    NOT NULL "
     ")"
 };
 
@@ -71,7 +71,7 @@ static const char* createSBTable = {
 		"md5secret             VARCHAR(80), "
 		"remotesecret          VARCHAR(250), "
 		"transport             VARCHAR(10), "
-		"host                  VARCHAR(31) default '' not null, "
+                "host                  VARCHAR(31) default 'dynamic' not null, "
 		"nat                   VARCHAR(5) DEFAULT 'no' not null, "
 		"type                  VARCHAR(10) DEFAULT 'friend' not null, "
 		"accountcode           VARCHAR(20), "
@@ -96,7 +96,7 @@ static const char* createSBTable = {
 		"fullcontact           VARCHAR(80), "
 		"ipaddr                VARCHAR(45), "
 		"port                  int(5) DEFAULT 5062, "
-		"username              VARCHAR(80), "
+		"username              VARCHAR(80) unique not null, "
 		"defaultuser           VARCHAR(80), "
 		"subscribecontext      VARCHAR(80), "
 		"directmedia           VARCHAR(3), "
