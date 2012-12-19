@@ -3,7 +3,7 @@ COM=$(TRUNK)/CommonLibs
 #SR=$(TRUNK)/subscriberRegistry/trunk-public-staging
 LOCALLIBS=$(COM)/Logger.cpp $(COM)/Timeval.cpp $(COM)/Threads.cpp $(COM)/Sockets.cpp $(COM)/Configuration.cpp $(COM)/sqlite3util.cpp SubscriberRegistry.cpp servershare.cpp
 LIBS=$(LOCALLIBS) -losipparser2 -losip2 -lc -lpthread -lsqlite3
-INCLUDES=-I$(COM)
+INCLUDES=-I$(COM) -I$(TRUNK)
 CPPFLAGS=-g -Wall -Wno-deprecated
 
 all: srmanager.cgi sipauthserve
