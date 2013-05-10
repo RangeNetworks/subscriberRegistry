@@ -99,3 +99,10 @@ a3_a8                 varchar(45) default NULL,
 primary key(id)
 ) 
 ;
+
+create table if not exists 'rates' 
+(
+service varchar(30) not null, 
+rate integer not null
+)
+;
