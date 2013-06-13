@@ -1,3 +1,6 @@
+PRAGMA foreign_keys=OFF;
+PRAGMA journal_mode=WAL;
+BEGIN TRANSACTION;
 create table dialdata_table (
 	id		INTEGER,
         exten           VARCHAR(40)     NOT NULL        DEFAULT '',
@@ -106,3 +109,4 @@ service varchar(30) not null,
 rate integer not null
 )
 ;
+COMMIT;
