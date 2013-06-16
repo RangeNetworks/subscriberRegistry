@@ -276,7 +276,12 @@ SubscriberRegistry::Status SubscriberRegistry::sqlUpdate(const char *stmt)
 string SubscriberRegistry::imsiGet(string imsi, string key)
 {
 	string name = imsi.substr(0,4) == "IMSI" ? imsi : "IMSI" + imsi;
-	return sqlQuery(key.c_str(), "sip_buddies", "name", imsi.c_str());
+	char *st = sqlQuery(key.c_str(), "sip_buddies", "name", imsi.c_str());
+	if (!st) {
+		LOG(WARNING) << "cannot get key " << key << " for username " << imsi;
+		return "";
+	}
+	return st;
 }
 
 bool SubscriberRegistry::imsiSet(string imsi, string key, string value)
