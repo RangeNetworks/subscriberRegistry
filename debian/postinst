@@ -19,27 +19,29 @@ set -e
 
 configure()
 {
-DATE=$(date --rfc-3339='date')
-CONFIG_BACKUP=/etc/OpenBTS/OpenBTS.dump-$DATE
+DB_LOC=/etc/OpenBTS/sipauthserve.db
+DATE=$(date +'%Y-%m-%d.%H:%M:%S')
+CONFIG_BACKUP=$DB_LOC.dump-$DATE
 
 
-if [ ! -e $CONFIG_BACKUP ]; then
-        sqlite3 /etc/OpenBTS/sipauthserve.db ".dump" > $CONFIG_BACKUP
+if [ -e $DB_LOC ]; then
+        sqlite3 $DB_LOC ".dump" > $CONFIG_BACKUP
 fi
 
 #create the SR config db
-sqlite3 /etc/OpenBTS/sipauthserve.db ".read /etc/OpenBTS/subscriberRegistry.example.sql" > /dev/null 2>&1
+sqlite3 $DB_LOC ".read /etc/OpenBTS/sipauthserve.example.sql" > /dev/null 2>&1
 
-SRPATH=/var/lib/asterisk/sqlite3dir/sqlite3.db
-
-DATE=$(date --rfc-3339='date')
+SR_DIR=/var/lib/asterisk/sqlite3dir
+SRPATH=$SR_DIR/sqlite3.db
 SR_CONFIG_BACKUP=$SRPATH.dump-$DATE
 
-if [ ! -d /var/lib/asterisk/sqlite3dir ]; then
-	mkdir /var/lib/asterisk/sqlite3dir
+if [ ! -d $SR_DIR ]; then
+	mkdir -p $SR_DIR
 fi
-chown -R root:www-data /var/lib/asterisk/sqlite3dir
-chmod 775 /var/lib/asterisk/sqlite3dir/
+chown -R root:www-data $SR_DIR
+chmod 775 $SR_DIR
+
+sqlite3 $SRPATH ".read /etc/OpenBTS/subscriberRegistryInit.sql" > /dev/null 2>&1
 
 if [ -e $SRPATH ]; then
 	if [ ! -e $SR_CONFIG_BACKUP ]; then
@@ -56,19 +58,16 @@ if [ -e $SRPATH ]; then
 		sqlite3 $SRPATH "alter table sip_buddies add column account_balance int(9) default 0"
 	fi
 
-	sqlite3 $SRPATH "create table if not exists rates (service varchar(30) unique not null, rate integer not null)"
 	sqlite3 $SRPATH "insert or ignore into 'rates' values ('in-network-SMS', 0)"
 	sqlite3 $SRPATH "insert or ignore into 'rates' values ('out-of-network-SMS', 0)"
 	sqlite3 $SRPATH "insert or ignore into 'rates' values ('in-network-call', 0)"
 	sqlite3 $SRPATH "insert or ignore into 'rates' values ('out-of-network-call', 0)"
-else
-    sqlite3 $SRPATH ".read /etc/OpenBTS/subscriberRegistryInit.sql" > /dev/null 2>&1
 fi
 
 # set up permissions for webui, temporary fix until ui is replumbed to use json
 # directory permissions
-if [ -e /var/lib/asterisk/sqlite3dir/sqlite3.db ]; then
-	chmod 664 /var/lib/asterisk/sqlite3dir/sqlite3*
+if [ -e $SRPATH ]; then
+	chmod 664 $SR_DIR/sqlite3*
 fi
 
 }

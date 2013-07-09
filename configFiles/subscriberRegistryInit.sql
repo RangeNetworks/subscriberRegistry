@@ -1,14 +1,14 @@
 PRAGMA foreign_keys=OFF;
 PRAGMA journal_mode=WAL;
 BEGIN TRANSACTION;
-create table dialdata_table (
+CREATE TABLE IF NOT EXISTS dialdata_table (
 	id		INTEGER,
         exten           VARCHAR(40)     NOT NULL        DEFAULT '',
         dial		VARCHAR(128)    NOT NULL        DEFAULT '',
         PRIMARY KEY     (id)
 );
 
-CREATE TABLE 'sip_buddies'
+CREATE TABLE IF NOT EXISTS 'sip_buddies'
 (
 id                    integer,
 name                  VARCHAR(80) not null,
@@ -103,7 +103,7 @@ primary key(id)
 ) 
 ;
 
-create table if not exists 'rates' 
+CREATE TABLE IF NOT EXISTS 'rates' 
 (
 service varchar(30) not null, 
 rate integer not null
