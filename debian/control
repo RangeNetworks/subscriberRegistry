@@ -13,5 +13,6 @@ Priority: optional
 Architecture: any
 Essential: no
 Depends: sqlite3, libosip2-4, libglib2.0-0, libgl1-mesa-glx, libc6, libasound2, pkg-config, libpcre3, gawk
+Conflicts: sipauthserve
 Description: Sipauthserver, the authorization server for OpenBTS.
 
