@@ -46,11 +46,100 @@ extern SubscriberRegistry gSubscriberRegistry;
 
 
 
+ConfigurationKeyMap getConfigurationKeys()
+{
+	ConfigurationKeyMap map;
+	ConfigurationKey *tmp;
+
+	tmp = new ConfigurationKey("SIP.Proxy.Registration","127.0.0.1:5064",
+		"",
+		ConfigurationKey::CUSTOMERWARN,
+		ConfigurationKey::IPANDPORT,
+		"",
+		false,
+		"The IP host and port of the proxy to be used for registration and authentication.  "
+			"This should normally be the subscriber registry SIP interface, not Asterisk."
+	);
+	map[tmp->getName()] = *tmp;
+	delete tmp;
+
+	tmp = new ConfigurationKey("SubscriberRegistry.A3A8","/OpenBTS/comp128",
+		"",
+		ConfigurationKey::CUSTOMERWARN,
+		ConfigurationKey::FILEPATH,
+		"",
+		false,
+		"Path to the program that implements the A3/A8 algorithm."
+	);
+	map[tmp->getName()] = *tmp;
+	delete tmp;
+
+	tmp = new ConfigurationKey("SubscriberRegistry.db","/var/lib/asterisk/sqlite3dir/sqlite3.db",
+		"",
+		ConfigurationKey::CUSTOMERWARN,
+		ConfigurationKey::FILEPATH,
+		"",
+		false,
+		"The location of the sqlite3 database holding the subscriber registry."
+	);
+	map[tmp->getName()] = *tmp;
+	delete tmp;
+
+	tmp = new ConfigurationKey("SubscriberRegistry.Manager.Title","Subscriber Registry",
+		"",
+		ConfigurationKey::CUSTOMER,
+		ConfigurationKey::STRING,
+		"^[[:print:]]+$",
+		false,
+		"Title text to be displayed on the subscriber registry manager."
+	);
+	map[tmp->getName()] = *tmp;
+	delete tmp;
+
+	tmp = new ConfigurationKey("SubscriberRegistry.Manager.VisibleColumns","name username type context host",
+		"",
+		ConfigurationKey::CUSTOMERTUNE,
+		ConfigurationKey::STRING,
+		"^(name){0,1} (username){0,1} (type){0,1} (context){0,1} (host){0,1}$",
+		false,
+		"A space separated list of columns to display in the subscriber registry manager."
+	);
+	map[tmp->getName()] = *tmp;
+	delete tmp;
+
+	tmp = new ConfigurationKey("SubscriberRegistry.Port","5064",
+		"",
+		ConfigurationKey::CUSTOMERWARN,
+		ConfigurationKey::PORT,
+		"",
+		false,
+		"Port used by the SIP Authentication Server. NOTE: In some older releases (pre-2.8.1) this is called SIP.myPort."
+	);
+	map[tmp->getName()] = *tmp;
+	delete tmp;
+
+	tmp = new ConfigurationKey("SubscriberRegistry.UpstreamServer","",
+		"",
+		ConfigurationKey::CUSTOMERWARN,
+		ConfigurationKey::STRING_OPT,// audited
+		"",
+		false,
+		"URL of the subscriber registry HTTP interface on the upstream server.  "
+			"By default, this feature is disabled.  "
+			"To enable, specify a server URL eg: http://localhost/cgi/subreg.cgi.  "
+			"To disable again, execute \"unconfig SubscriberRegistry.UpstreamServer\"."
+	);
+	map[tmp->getName()] = *tmp;
+	delete tmp;
+
+	return map;
+}
+
 string imsiGet(string imsi, string key)
 {
 	string name = imsi.substr(0,4) == "IMSI" ? imsi : "IMSI" + imsi;
 	char *value;
-	if (!sqlite3_single_lookup(gSubscriberRegistry.db(), "sip_buddies", "name", name.c_str(), key.c_str(), value)) {
+	if (!sqlite3_single_lookup(gSubscriberRegistry.db(), "sip_buddies", "username", name.c_str(), key.c_str(), value)) {
 		return "";
 	}
 	if (!value) { return ""; }
@@ -63,7 +152,7 @@ void imsiSet(string imsi, string key, string value)
 {
 	string name = imsi.substr(0,4) == "IMSI" ? imsi : "IMSI" + imsi;
 	ostringstream os2;
-	os2 << "update sip_buddies set " << key << " = \"" << value << "\" where name = \"" << name << "\"";
+	os2 << "update sip_buddies set " << key << " = \"" << value << "\" where username = \"" << name << "\"";
 	if (!sqlite3_command(gSubscriberRegistry.db(), os2.str().c_str())) {
 		LOG(ERR) << "sqlite3_command problem";
 		return;
@@ -114,6 +203,121 @@ string generateRand(string imsi)
 bool strEqual(string a, string b)
 {
 	return 0 == strcasecmp(a.c_str(), b.c_str());
+}
+
+bool sresEqual(string a, string b)
+{
+	stringstream ss1;
+	stringstream ss2;
+	uint32_t sres1 = 0xffffffff;
+	uint32_t sres2 = 0xffffffff;
+
+	if (a.empty() || b.empty())
+		return false;
+
+	ss1 << hex << a;
+	ss2 << hex << b;
+
+	ss1 >> sres1;
+	ss2 >> sres2;
+
+	LOG(DEBUG) << "sres1 = " << sres1;
+	LOG(DEBUG) << "sres2 = " << sres2;
+
+	return (sres1 == sres2);
+}
+
+bool randEqual(string a, string b)
+{
+	uint64_t rand1h = 0;
+	uint64_t rand1l = 0;
+	uint64_t rand2h = 0;
+	uint64_t rand2l = 0;
+
+	if (a.empty() || b.empty())
+		return false;
+
+	gSubscriberRegistry.stringToUint(a, &rand1h, &rand1l);
+	gSubscriberRegistry.stringToUint(b, &rand2h, &rand2l);
+
+	LOG(DEBUG) << "rand1h = " << rand1h << ", rand1l = " << rand1l;
+	LOG(DEBUG) << "rand2h = " << rand2h << ", rand2l = " << rand2l;
+
+	return (rand1h == rand2h) && (rand1l == rand2l);
+}
+
+// verify sres given rand and imsi's ki
+// may set kc
+// may cache sres and rand
+bool authenticate(string imsi, string randx, string sres, string *kc)
+{
+	string ki = imsiGet(imsi, "ki");
+	bool ret;
+	if (ki.length() == 0) {
+		// Ki is unknown
+		string upstream_server = gConfig.getStr("SubscriberRegistry.UpstreamServer");
+		if (upstream_server.length()) {
+			LOG(INFO) << "ki unknown, upstream server";
+			// there's an upstream server for authentication.
+			// TODO - call the upstream server
+			ret = false;
+		} else {
+			// there's no upstream server for authentication.  fake it.
+			string sres2 = imsiGet(imsi, "sres");
+			if (sres2.length() == 0) {
+				LOG(INFO) << "ki unknown, no upstream server, sres not cached";
+				// first time - cache sres and rand so next time
+				// correct cell phone will calc same sres from same rand
+				imsiSet(imsi, "sres", sres);
+				imsiSet(imsi, "rand", randx);
+				ret = true;
+			} else {
+				LOG(INFO) << "ki unknown, no upstream server, sres cached";
+				// check against cached values of rand and sres
+				string rand2 = imsiGet(imsi, "rand");
+				// TODO - on success, compute and return kc
+				LOG(DEBUG) << "comparing " << sres << " to " << sres2 << " and " << randx << " to " << rand2;
+				ret = sresEqual(sres, sres2) && randEqual(randx, rand2);
+			}
+		}
+	} else {
+		LOG(INFO) << "ki known";
+		// Ki is known, so do normal authentication
+		ostringstream os;
+		// per user value from subscriber registry
+		string a3a8 = imsiGet(imsi, "a3_a8");
+		if (a3a8.length() == 0) {
+			// config value is default
+			a3a8 = gConfig.getStr("SubscriberRegistry.A3A8");
+		}
+		os << a3a8 << " 0x" << ki << " 0x" << randx;
+		// must not put ki into the log
+		// LOG(INFO) << "running " << os.str();
+		FILE *f = popen(os.str().c_str(), "r");
+		if (f == NULL) {
+			LOG(CRIT) << "error: popen failed";
+			return false;
+		}
+		char sres2[26];
+		char *str = fgets(sres2, 26, f);
+		if (str != NULL && strlen(str) == 25) str[24] = 0;
+		if (str == NULL || strlen(str) != 24) {
+			LOG(CRIT) << "error: popen result failed";
+			return false;
+		}
+		int st = pclose(f);
+		if (st == -1) {
+			LOG(CRIT) << "error: pclose failed";
+			return false;
+		}
+		// first 8 chars are SRES;  rest are Kc
+		*kc = sres2+8;
+		sres2[8] = 0;
+		LOG(INFO) << "result = " << sres2;
+		ret = sresEqual(sres, sres2);
+	}
+	LOG(INFO) << "returning = " << ret;
+	return ret;
 }
 
 void decodeQuery(map<string,string> &args)

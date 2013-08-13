@@ -30,6 +30,11 @@
 using namespace std;
 
 /**
+	Returns all valid configuration keys for the subscriber registry.
+*/
+ConfigurationKeyMap getConfigurationKeys();
+
+/**
 	Get a subscriber's property.
 	@param imsi imsi of the subscriber
 	@param key name of the property
@@ -49,6 +54,14 @@ void imsiSet(string imsi, string key, string value);
 	@param imsi imsi of subscriber the random number is for
 */
 string generateRand(string imsi);
+
+/**
+	Authenticate
+	@param imsi imsi of subscriber
+	@param rand random number
+	@param sres corresponsing sres
+*/
+bool authenticate(string imsi, string rand, string sres, string *kc);
 
 /**
 	Decode the html query.

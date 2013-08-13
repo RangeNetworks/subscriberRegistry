@@ -42,7 +42,7 @@ class SubscriberRegistry {
 	private:
 
 	sqlite3 *mDB;			///< database connection
-
+	unsigned mNumSQLTries;		///< Number of times to try an sqlite command before giving up.
 
 	public:
 
@@ -142,6 +142,24 @@ class SubscriberRegistry {
 
 
 
+	/**
+		Get a 128-bit number for authentication.
+		@param sip sip server (true) or http
+		@param IMSI The user's IMSI or SIP username.
+		@return the 128-bit number in hex
+	*/
+	string getRandForAuthentication(bool sip, string IMSI);
+
+
+	/**
+		Get a 128-bit number for authentication.
+		@param sip sip server (true) or http
+		@param IMSI The user's IMSI or SIP username;
+		@param hRAND upper 64 bits
+		@param lRAND lower 64 bits
+	*/
+	bool getRandForAuthentication(bool sip, string IMSI, uint64_t *hRAND, uint64_t *lRAND);
+
 	void stringToUint(string strRAND, uint64_t *hRAND, uint64_t *lRAND);
 
 	string uintToString(uint64_t h, uint64_t l);
@@ -149,6 +167,18 @@ class SubscriberRegistry {
 	string uintToString(uint32_t x);
 
 	SubscriberRegistry::Status authenticate(bool sip, string IMSI, uint64_t hRAND, uint64_t lRAND, uint32_t SRES);
+
+
+
+	/**
+		Authenticate a handset.
+		@param sip sip server (true) or http
+		@param IMSI The user's IMSI or SIP username.
+		@param rand RAND.
+		@param sres SRES
+		@return ok or fail
+	*/
+	SubscriberRegistry::Status authenticate(bool sip, string IMSI, string rand, string sres);
 
 
 
@@ -228,6 +258,15 @@ class SubscriberRegistry {
 
 
 	/**
+		Run sql statments over http.
+		@param stmt The sql statements.
+		@param resultptr Set this to point to the result of executing the statements.
+	*/
+	Status sqlHttp(const char *stmt, char **resultptr);
+
+
+
+	/**
 		Run an sql query (select unknownColumn from table where knownColumn = knownValue).
 		@param unknownColumn The column whose value you want.
 		@param table The table to look in.
@@ -248,6 +287,74 @@ class SubscriberRegistry {
 
 
 
+
+
+
+};
+
+
+
+/** Class that SubscriberRegistry uses to setup an http query, run it, and get the results. */
+class HttpQuery {
+
+
+
+	public:
+
+
+
+	/**
+		Constructor.
+		@param req The type of http query (sql, (get a)rand(om number) auth(enticate), etc).
+	*/
+	HttpQuery(const char *req);
+
+
+
+	/**
+		Specify a parameter to send in the http query.
+		@param label The label or name for the parameter.
+		@param value The value of the parameter.
+	*/
+	void send(const char *label, string value);
+
+
+
+	/**
+		Log the query.
+		*/
+	void log();
+
+
+	/**
+		This runs the http query.
+		@param sip Whether to call the sip server as opposed to the http server.
+	*/
+	bool http(bool sip);
+
+
+
+	/**
+		Get result from the http query.
+		@param label The label or name of the parameter whose value you want.
+	*/
+	const char *receive(const char *label);
+
+
+
+
+
+	private:
+
+
+
+	/** stores the parameters to send. */
+	map<string,string> sends;
+
+
+
+	/** stores the return parameters. */
+	map<string,string> receives;
 
 
 

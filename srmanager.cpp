@@ -39,7 +39,8 @@
 
 using namespace std;
 
-ConfigurationTable gConfig("/etc/OpenBTS/sipauthserve.db");
+ConfigurationTable gConfig("/etc/OpenBTS/OpenBTS.db", "srmanager", getConfigurationKeys());
+Log dummy("srmanager",gConfig.getStr("Log.Level").c_str(),LOG_LOCAL7);
 map<string,string> gArgs;
 string gDatabase;
 string gVisibleSipColumns;
@@ -86,13 +87,14 @@ void initTable(vector<string> &cols)
 
 void table(const char *tableName, vector<string> &cols, bool addButtonP, const char *note)
 {
-	cout << "<h4>" << gDatabase << "." << tableName << "  (" << note << ")</h4>\n";
+	cout << "<h4>" << gDatabase << "." << tableName << "  " << note << "</h4>\n";
 	initTable(cols);
 	ostringstream os;
 	os << "select id," << join(",", cols) << " from " << tableName;
 	sqlite3_stmt *stmt;
 	if (sqlite3_prepare_statement(gSubscriberRegistry.db(), &stmt,os.str().c_str())) {
-		cout << "sqlite3_prepare_statement problem" << endl;
+		LOG(ERR) << "sqlite3_prepare_statement problem - statement: " << os.str();
+		LOG(ERR) << "   " << sqlite3_errmsg(gSubscriberRegistry.db());
 		return;
 	}
 	int src = sqlite3_run_query(gSubscriberRegistry.db(), stmt);
@@ -101,7 +103,7 @@ void table(const char *tableName, vector<string> &cols, bool addButtonP, const c
 		const char *id = (const char*)sqlite3_column_text(stmt, 0);
 		for (int i = 1; i <= (int)cols.size(); i++) {
 			const char *value = (const char*)sqlite3_column_text(stmt, i);
-			values.push_back(value ? value : "-NULL-");
+			values.push_back(value ? value : "(null)");
 		}
 		tableRow(cols, values, UPDATE_BUTTON | DELETE_BUTTON, id);
 		src = sqlite3_run_query(gSubscriberRegistry.db(), stmt);
@@ -121,6 +123,7 @@ void getFields(vector<string> *fields, vector<bool> *isSet)
 	const char *cmd = "pragma table_info(sip_buddies)";
 	if (sqlite3_prepare_statement(gSubscriberRegistry.db(), &stmt, cmd)) {
 		LOG(ERR) << "sqlite3_prepare_statement problem - statement: " << cmd;
+		LOG(ERR) << "   " << sqlite3_errmsg(gSubscriberRegistry.db());
 		return;
 	}
 	int src = sqlite3_run_query(gSubscriberRegistry.db(), stmt);
@@ -146,7 +149,7 @@ void mainTables()
 
 	vector<string> vsc;
 	split(' ', gVisibleSipColumns, &vsc);
-	table("sip_buddies", vsc, false, "scroll down to change which fields of sip_buddies are visible");
+	table("sip_buddies", vsc, false, "(scroll down to change which fields of sip_buddies are visible)");
 	cout << "<hr>";
 	vector<string> vec;
 	split(' ', gVisibleExtColumns, &vec);
@@ -170,6 +173,15 @@ void mainTables()
 	cout << "</form>\n";
 }
 
+string nullCheck(string s)
+{
+	if (s == "(null)") {
+		return "NULL";
+	} else {
+		return "\"" + s + "\"";
+	}
+}
+
 void doCmd(string cmd)
 {
 	string table;
@@ -188,7 +200,7 @@ void doCmd(string cmd)
 		vector<string> values0;
 		vector<string>::iterator it;
 		for (it = cols.begin(); it != cols.end(); it++) {
-			values0.push_back("\"" + gArgs[*it] + "\"");
+			values0.push_back(nullCheck(gArgs[*it]));
 		}
 		string values = join(",", values0);
 		os << "insert into " << table << " (" << names << ") values (" << values << ")";
@@ -198,15 +210,16 @@ void doCmd(string cmd)
 		vector<string> sets0;
 		vector<string>::iterator it;
 		for (it = cols.begin(); it != cols.end(); it++) {
-			sets0.push_back(*it + "=\"" + gArgs[*it] + "\"");
+			sets0.push_back(*it + "=" + nullCheck(gArgs[*it]));
 		}
 		string sets = join(",", sets0);
 		os << "update " << table << " set " << sets << " where id = " << id;
 	} else {
-		cout << "internal error<br>\n";
+		LOG(ERR) << "internal error";
 	}
+	LOG(INFO) << os.str();
 	if (!sqlite3_command(gSubscriberRegistry.db(), os.str().c_str())) {
-		cout << "sqlite3_command problem" << endl;
+		LOG(ERR) << "sqlite3_command problem - statement: " << os.str();
 		return;
 	}
 	mainTables();
@@ -234,16 +247,34 @@ void endHtml()
 	cout << "</HTML>\n";
 }
 
+void doVisibles()
+{
+	gVisibleSipColumns = "";
+	map<string,string>::iterator it;
+	bool first = true;
+	for (it = gArgs.begin(); it != gArgs.end(); it++) {
+		if (it->first == "what") continue;
+		if (first) {
+			first = false;
+		} else {
+			gVisibleSipColumns += " ";
+		}
+		gVisibleSipColumns += it->first;
+	}
+	if (!gConfig.set("SubscriberRegistry.Manager.VisibleColumns", gVisibleSipColumns)) {
+		LOG(ERR) << "unable to update SubscriberRegistry.Manager.VisibleColumns";
+	}
+}
+
 int main(int argc, char **argv)
 {
-	gLogInit("srmanager",gConfig.getStr("Log.Level").c_str(),LOG_LOCAL7);
 	gSubscriberRegistry.init();
-	// read the config file
-	gVisibleSipColumns = gConfig.getStr("SubscriberRegistry.Manager.VisibleColumns");
-	gUrl = argv[0];
-	gTitle = gConfig.getStr("SubscriberRegistry.Manager.Title");
 	// start the html return
 	initHtml();
+	// read the config file
+	gVisibleSipColumns = gConfig.getStr("SubscriberRegistry.Manager.VisibleColumns");
+	gUrl = "/cgi/srmanager.cgi";
+	gTitle = gConfig.getStr("SubscriberRegistry.Manager.Title");
 	// connect to the database
 	gDatabase = gConfig.getStr("SubscriberRegistry.db");
 	// decode the http query
@@ -262,21 +293,7 @@ int main(int argc, char **argv)
 		gSubscriberRegistry.addUser(gArgs["imsi"].c_str(), gArgs["phonenumber"].c_str());
 		mainTables();
 	} else if (what == "Submit") {
-		gVisibleSipColumns = "";
-		map<string,string>::iterator it;
-		bool first = true;
-		for (it = gArgs.begin(); it != gArgs.end(); it++) {
-			if (it->first == "what") continue;
-			if (first) {
-				first = false;
-			} else {
-				gVisibleSipColumns += " ";
-			}
-			gVisibleSipColumns += it->first;
-		}
-		if (!gConfig.set("SubscriberRegistry.Manager.VisibleColumns", gVisibleSipColumns)) {
-			LOG(ERR) << "unable to update SubscriberRegistry.Manager.VisibleColumns";
-		}
+		doVisibles();
 		mainTables();
 	} else {
 		cout << "unrecognized what parameter<br>\n";

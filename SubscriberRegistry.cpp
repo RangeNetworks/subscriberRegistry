@@ -173,7 +173,8 @@ int SubscriberRegistry::init()
 		LOG(EMERG) << dir << " does not exist";
 		mDB = NULL;
 		return 1;
-	} 
+	}
+	mNumSQLTries=gConfig.getNum("Control.NumSQLTries"); 
 	int rc = sqlite3_open(ldb.c_str(),&mDB);
 	if (rc) {
 		LOG(EMERG) << "Cannot open SubscriberRegistry database: " << ldb << " error: " << sqlite3_errmsg(mDB);
@@ -181,21 +182,25 @@ int SubscriberRegistry::init()
 		mDB = NULL;
 		return 1;
 	}
-	if (!sqlite3_command(mDB,createRRLPTable)) {
+	if (!sqlite3_command(mDB,createRRLPTable,mNumSQLTries)) {
 		LOG(EMERG) << "Cannot create RRLP table";
 		return 1;
 	}
-	if (!sqlite3_command(mDB,createDDTable)) {
+	if (!sqlite3_command(mDB,createDDTable,mNumSQLTries)) {
 		LOG(EMERG) << "Cannot create DIALDATA_TABLE table";
 		return 1;
 	}
-	if (!sqlite3_command(mDB,createRateTable)) {
+	if (!sqlite3_command(mDB,createRateTable,mNumSQLTries)) {
 		LOG(EMERG) << "Cannot create rate table";
 		return 1;
 	}
-	if (!sqlite3_command(mDB,createSBTable)) {
+	if (!sqlite3_command(mDB,createSBTable,mNumSQLTries)) {
 		LOG(EMERG) << "Cannot create SIP_BUDDIES table";
 		return 1;
+	}
+	// Set high-concurrency WAL mode.
+	if (!sqlite3_command(mDB,enableWAL,mNumSQLTries)) {
+		LOG(EMERG) << "Cannot enable WAL mode on database at " << ldb << ", error message: " << sqlite3_errmsg(mDB);
 	}
 	if (!getCLIDLocal("IMSI001010000000000")) {
 		// This is a test SIM provided with the BTS.
@@ -213,21 +218,37 @@ SubscriberRegistry::~SubscriberRegistry()
 	if (mDB) sqlite3_close(mDB);
 }
 
+
+
+SubscriberRegistry::Status SubscriberRegistry::sqlHttp(const char *stmt, char **resultptr)
+{
+	LOG(INFO) << stmt;
+	HttpQuery qry("sql");
+	qry.send("stmts", stmt);
+	if (!qry.http(false)) return FAILURE;
+	const char *res = qry.receive("res");
+	if (!res) return FAILURE; 
+	*resultptr = strdup(res);
+	return SUCCESS;
+}
+
+
+
 SubscriberRegistry::Status SubscriberRegistry::sqlLocal(const char *query, char **resultptr)
 {
 	LOG(INFO) << query;
 
 	if (!resultptr) {
-		if (!sqlite3_command(db(), query)) return FAILURE;
+		if (!sqlite3_command(db(), query, mNumSQLTries)) return FAILURE;
 		return SUCCESS;
 	}
 
 	sqlite3_stmt *stmt;
-	if (sqlite3_prepare_statement(db(), &stmt, query)) {
+	if (sqlite3_prepare_statement(db(), &stmt, query, mNumSQLTries)) {
 		LOG(ERR) << "sqlite3_prepare_statement problem with query \"" << query << "\"";
 		return FAILURE;
 	}
-	int src = sqlite3_run_query(db(), stmt);
+	int src = sqlite3_run_query(db(), stmt, mNumSQLTries);
 	if (src != SQLITE_ROW) {
 		sqlite3_finalize(stmt);
 		return FAILURE;
@@ -258,6 +279,19 @@ char *SubscriberRegistry::sqlQuery(const char *unknownColumn, const char *table,
 		LOG(INFO) << "result = " << result;
 		return result;
 	}
+	// didn't find locally, so try over http
+	st = sqlHttp(os.str().c_str(), &result);
+	if ((st == SUCCESS) && result) {
+		// found over http but not locally, so cache locally
+		ostringstream os2;
+		os2 << "insert into " << table << "(" << knownColumn << ", " << unknownColumn << ") values (\"" <<
+			knownValue << "\",\"" << result << "\")";
+		// ignore whether it succeeds
+		sqlLocal(os2.str().c_str(), NULL);
+		LOG(INFO) << "result = " << result;
+		return result;
+	}
+	// didn't find locally or over http
 	LOG(INFO) << "not found: " << os.str();
 	return NULL;
 }
@@ -268,6 +302,7 @@ SubscriberRegistry::Status SubscriberRegistry::sqlUpdate(const char *stmt)
 {
 	LOG(INFO) << stmt;
 	SubscriberRegistry::Status st = sqlLocal(stmt, NULL);
+	sqlHttp(stmt, NULL);
 	// status of local is only important one because asterisk talks to that db directly
 	// must update local no matter what
 	return st;
@@ -458,6 +493,35 @@ SubscriberRegistry::Status SubscriberRegistry::RRLPUpdate(string name, string la
 	return sqlUpdate(os.str().c_str());
 }
 
+
+
+string SubscriberRegistry::getRandForAuthentication(bool sip, string IMSI)
+{
+	if (IMSI.length() == 0) {
+		LOG(WARNING) << "SubscriberRegistry::getRandForAuthentication attempting lookup of NULL IMSI";
+		return "";
+	}
+	LOG(INFO) << "getRandForAuthentication(" << IMSI << ")";
+	// get rand from SR server
+	HttpQuery qry("rand");
+	qry.send("imsi", IMSI);
+	qry.log();
+	if (!qry.http(sip)) return "";
+	return qry.receive("rand");
+}
+
+bool SubscriberRegistry::getRandForAuthentication(bool sip, string IMSI, uint64_t *hRAND, uint64_t *lRAND)
+{
+	string strRAND = getRandForAuthentication(sip, IMSI);
+	if (strRAND.length() == 0) {
+		*hRAND = 0;
+		*lRAND = 0;
+		return false;
+	}
+	stringToUint(strRAND, hRAND, lRAND);
+	return true;
+}
+
 void SubscriberRegistry::stringToUint(string strRAND, uint64_t *hRAND, uint64_t *lRAND)
 {
 	assert(strRAND.size() == 32);
@@ -494,6 +558,36 @@ string SubscriberRegistry::uintToString(uint32_t x)
 	os << hex << x;
 	return os.str();
 }
+
+SubscriberRegistry::Status SubscriberRegistry::authenticate(bool sip, string IMSI, uint64_t hRAND, uint64_t lRAND, uint32_t SRES)
+{
+	string strRAND = uintToString(hRAND, lRAND);
+	string strSRES = uintToString(SRES);
+	return authenticate(sip, IMSI, strRAND, strSRES);
+}
+
+
+SubscriberRegistry::Status SubscriberRegistry::authenticate(bool sip, string IMSI, string rand, string sres)
+{
+	if (IMSI.length() == 0) {
+		LOG(WARNING) << "SubscriberRegistry::authenticate attempting lookup of NULL IMSI";
+		return FAILURE;
+	}
+	LOG(INFO) << "authenticate(" << IMSI << "," << rand << "," << sres << ")";
+	HttpQuery qry("auth");
+	qry.send("imsi", IMSI);
+	qry.send("rand", rand);
+	qry.send("sres", sres);
+	qry.log();
+	if (!qry.http(sip)) return FAILURE;
+	const char *status = qry.receive("status");
+	if (strcmp(status, "SUCCESS") == 0) return SUCCESS;
+	if (strcmp(status, "FAILURE") == 0) return FAILURE;
+	// status is Kc
+	return SUCCESS;
+}
+
+
 
 bool SubscriberRegistry::useGateway(const char* ISDN)
 {
@@ -572,6 +666,122 @@ SubscriberRegistry::Status SubscriberRegistry::serviceUnits(const char *IMSI, co
 	units = balance / rate;
 	return SUCCESS;
 }
+
+
+
+HttpQuery::HttpQuery(const char *req)
+{
+	sends = map<string,string>();
+	sends["req"] = req;
+	receives = map<string,string>();
+}
+
+void HttpQuery::send(const char *label, string value)
+{
+	sends[label] = value;
+}
+
+void HttpQuery::log()
+{
+	ostringstream os;
+	bool first = true;
+	for (map<string,string>::iterator it = sends.begin(); it != sends.end(); it++) {
+		if (first) {
+			first = false;
+		} else {
+			os << "&";
+		}
+		os << it->first << "=" << it->second;
+	}
+	LOG(INFO) << os.str();
+}
+
+bool HttpQuery::http(bool sip)
+{
+	// unique temporary file names
+	ostringstream os1;
+	ostringstream os2;
+	os1 << "/tmp/subscriberregistry.1." << getpid();
+	os2 << "/tmp/subscriberregistry.2." << getpid();
+	string tmpFile1 = os1.str();
+	string tmpFile2 = os2.str();
+
+	// write the request and params to temp file
+	ofstream file1(tmpFile1.c_str());
+	if (file1.fail()) {
+		LOG(ERR) << "HttpQuery::http: can't write " << tmpFile1.c_str();
+		return false;
+	}
+	bool first = true;
+	for (map<string,string>::iterator it = sends.begin(); it != sends.end(); it++) {
+		if (first) {
+			first = false;
+		} else {
+			file1 << "&";
+		}
+		file1 << it->first << "=" << it->second;
+	}
+	file1.close();
+
+	// call the server
+	string server = sip ? 
+		gConfig.getStr("SIP.Proxy.Registration"):
+		gConfig.getStr("SubscriberRegistry.UpstreamServer");
+	if (server.length() == 0 && !sip) return false;
+	ostringstream os;
+	os << "curl -s --data-binary @" << tmpFile1.c_str() << " " << server << " > " << tmpFile2.c_str();
+	LOG(INFO) << os.str();
+	if (server == "testing") {
+		return false;
+	} else {
+		int st = system(os.str().c_str());
+		if (st != 0) {
+			LOG(ERR) << "curl call returned " << st;
+			return false;
+		}
+	}
+
+	// read the http return from another temp file
+	ifstream file2(tmpFile2.c_str());
+	if (file2.fail()) {
+		LOG(ERR) << "HTTPQuery::http: can't read " << tmpFile2.c_str();
+		return false;
+	}
+	string tmp;
+	while (getline(file2, tmp)) {
+		size_t pos = tmp.find('=');
+		if (pos != string::npos) {
+			string key = tmp.substr(0, pos);
+			string value = tmp.substr(pos+1);
+			if (key == "error") {
+				LOG(ERR) << "HTTPQuery::http error: " << value;
+				file2.close();
+				return false;
+			}
+			receives[key] = value;
+		} else {
+			file2.close();
+			LOG(ERR) << "HTTPQuery::http: bad server return:";
+			ifstream file22(tmpFile2.c_str());
+			while (getline(file22, tmp)) {
+				LOG(ERR) << tmp;
+			}
+			file22.close();
+			return false;
+		}
+	}
+	file2.close();
+	return true;
+}
+
+const char *HttpQuery::receive(const char *label)
+{
+	map<string,string>::iterator it = receives.find(label);
+	return it == receives.end() ? NULL : it->second.c_str();
+}
+
+
+
 
 
 

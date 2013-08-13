@@ -20,11 +20,7 @@ APP=sipauthserve
 
 remove()
 {
-    if [ "$(pidof $APP)" ]; then
-	killall $APP
-    else
-	echo "$APP not running"
-    fi
+    killall $APP &>/dev/null
 }
 
 case "$1" in
