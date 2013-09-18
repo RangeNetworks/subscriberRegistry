@@ -50,6 +50,16 @@ string imsiGet(string imsi, string key);
 void imsiSet(string imsi, string key, string value);
 
 /**
+	Set a subscriber's property.
+	@param imsi imsi of the subscriber
+	@param key1 name of the property
+	@param value1 value of the property
+	@param key2 name of the property
+	@param value2 value of the property
+*/
+void imsiSet(string imsi, string key1, string value1, string key2, string value2);
+
+/**
 	Generate a 128-bit random number.
 	@param imsi imsi of subscriber the random number is for
 */

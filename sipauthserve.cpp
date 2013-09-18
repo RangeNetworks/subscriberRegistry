@@ -180,8 +180,7 @@ char *processBuffer(char *buffer)
                 osip_message_set_status_code (response, 200);
                 osip_message_set_reason_phrase (response, osip_strdup("OK"));
                 LOG(INFO) << "success, registering for IP address " << remote_host;
-                imsiSet(imsi,"ipaddr",remote_host);
-		imsiSet(imsi,"port",remote_port);
+                imsiSet(imsi,"ipaddr", remote_host, "port", remote_port);
 	} else {
 		// look for rand and sres in Authorization header (assume imsi same as in from)
 		string randx;
@@ -241,8 +240,7 @@ char *processBuffer(char *buffer)
 				}
 				// And register it.
 				LOG(INFO) << "success, registering for IP address " << remote_host;
-				imsiSet(imsi,"ipaddr",remote_host);
-				imsiSet(imsi,"port",remote_port);
+				imsiSet(imsi,"ipaddr", remote_host, "port", remote_port);
 			} else {
 				// sres does not match rand => 401 Unauthorized
 				osip_message_set_status_code (response, 401);

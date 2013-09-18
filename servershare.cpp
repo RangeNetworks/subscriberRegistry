@@ -159,6 +159,17 @@ void imsiSet(string imsi, string key, string value)
 	}
 }
 
+void imsiSet(string imsi, string key1, string value1, string key2, string value2)
+{
+	string name = imsi.substr(0,4) == "IMSI" ? imsi : "IMSI" + imsi;
+	ostringstream os2;
+	os2 << "update sip_buddies set " << key1 << " = \"" << value1 << "\"," << key2 << " = \"" << value2 << "\" where username = \"" << name << "\"";
+	if (!sqlite3_command(gSubscriberRegistry.db(), os2.str().c_str())) {
+		LOG(ERR) << "sqlite3_command problem";
+		return;
+	}
+}
+
 string soGenerateIt()
 {
 	ostringstream os;
@@ -179,8 +190,7 @@ string generateRand(string imsi)
 	if (ki.length() != 0) {
 		LOG(INFO) << "ki is known";
 		// generate and return rand (clear any cached rand or sres)
-		imsiSet(imsi, "rand", "");
-		imsiSet(imsi, "sres", "");
+		imsiSet(imsi, "rand", "", "sres", "");
 		ret = soGenerateIt();
 	} else {
 		string wRand = imsiGet(imsi, "rand");
@@ -192,8 +202,7 @@ string generateRand(string imsi)
 			LOG(INFO) << "ki is unknown, rand is not cached";
 			// generate rand, cache rand, clear sres, and return rand
 			wRand = soGenerateIt();
-			imsiSet(imsi, "rand", wRand);
-			imsiSet(imsi, "sres", "");
+			imsiSet(imsi, "rand", wRand, "sres", "");
 			ret = wRand;
 		}
 	}
@@ -268,8 +277,7 @@ bool authenticate(string imsi, string randx, string sres, string *kc)
 				LOG(INFO) << "ki unknown, no upstream server, sres not cached";
 				// first time - cache sres and rand so next time
 				// correct cell phone will calc same sres from same rand
-				imsiSet(imsi, "sres", sres);
-				imsiSet(imsi, "rand", randx);
+				imsiSet(imsi, "sres", sres, "rand", randx);
 				ret = true;
 			} else {
 				LOG(INFO) << "ki unknown, no upstream server, sres cached";
