@@ -55,6 +55,7 @@ install: all
 	mkdir -p $(OPATH)
 	install comp128 $(OPATH)
 	install sipauthserve $(OPATH)
+	install runloop.sipauthserve.sh $(OPATH)
 	mkdir -p $(CONFIGPATH)
 	install subscriberRegistry.example.sql $(CONFIGPATH)
 
