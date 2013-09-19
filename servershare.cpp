@@ -308,8 +308,7 @@ bool authenticate(string imsi, string randx, string sres, string *kc)
 		}
 		char sres2[26];
 		char *str = fgets(sres2, 26, f);
-		if (str != NULL && strlen(str) == 25) str[24] = 0;
-		if (str == NULL || strlen(str) != 24) {
+		if (str == NULL || strlen(str) != 25) {
 			LOG(CRIT) << "error: popen result failed";
 			return false;
 		}
@@ -319,7 +318,6 @@ bool authenticate(string imsi, string randx, string sres, string *kc)
 			return false;
 		}
 		// first 8 chars are SRES;  rest are Kc
-		*kc = sres2+8;
 		sres2[8] = 0;
 		LOG(INFO) << "result = " << sres2;
 		ret = sresEqual(sres, sres2);

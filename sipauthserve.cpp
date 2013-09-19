@@ -50,7 +50,7 @@
 
 using namespace std;
 
-ConfigurationTable gConfig("/etc/OpenBTS/sipauthserve.db", "sipauthserve", getConfigurationKeys());
+ConfigurationTable gConfig("/etc/OpenBTS/OpenBTS.db", "sipauthserve", getConfigurationKeys());
 Log dummy("sipauthserve", gConfig.getStr("Log.Level").c_str(), LOG_LOCAL7);
 
 int my_udp_port;
@@ -231,13 +231,6 @@ char *processBuffer(char *buffer)
 				// sres matches rand => 200 OK
 				osip_message_set_status_code (response, 200);
 				osip_message_set_reason_phrase (response, osip_strdup("OK"));
-				if (kc.size() != 0) {
-					osip_authentication_info *auth;
-					osip_authentication_info_init(&auth);
-					osip_authentication_info_set_cnonce(auth, osip_strdup(kc.c_str()));
-					i = osip_list_add (&response->authentication_infos, auth, -1);
-					if (i < 0) LOG(ERR) << "problem adding authentication_infos";
-				}
 				// And register it.
 				LOG(INFO) << "success, registering for IP address " << remote_host;
 				imsiSet(imsi,"ipaddr", remote_host, "port", remote_port);
