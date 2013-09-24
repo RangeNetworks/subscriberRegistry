@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # postinst script for test
 #
 # see: dh_installdeb(1)
@@ -35,7 +35,7 @@ DATE=$(date --rfc-3339='date')
 SR_CONFIG_BACKUP=$SRPATH.dump-$DATE
 
 
-if [ -e $SRPATH ]; then
+if [[ -e $SRPATH && "`sqlite3 $SRPATH "PRAGMA table_info(sip_buddies)"`" != "" ]]; then
 	if [ ! -e $SR_CONFIG_BACKUP ]; then
 		sqlite3 $SRPATH ".dump" > $SR_CONFIG_BACKUP
 	fi
