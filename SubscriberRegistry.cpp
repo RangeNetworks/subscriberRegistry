@@ -202,12 +202,6 @@ int SubscriberRegistry::init()
 	if (!sqlite3_command(mDB,enableWAL,mNumSQLTries)) {
 		LOG(EMERG) << "Cannot enable WAL mode on database at " << ldb << ", error message: " << sqlite3_errmsg(mDB);
 	}
-	if (!getCLIDLocal("IMSI001010000000000")) {
-		// This is a test SIM provided with the BTS.
-		if (addUser("IMSI001010000000000", "2100") != SUCCESS) {
-        		LOG(EMERG) << "Cannot insert test SIM";
-		}
-	}
 	return 0;
 }
 
