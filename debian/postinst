@@ -20,29 +20,40 @@ set -e
 configure()
 {
 WEBUSER=www-data
-DATE=$(date --rfc-3339='date')
+DB_LOC=/etc/OpenBTS/sipauthserve.db
+DATE=$(date +'%Y-%m-%d.%H:%M:%S')
+CONFIG_BACKUP=$DB_LOC.dump-$DATE
 
-CONFIG_BACKUP=/etc/OpenBTS/sipauthserve.dump-$DATE
 if [ ! -e $CONFIG_BACKUP ]; then
-        sqlite3 /etc/OpenBTS/sipauthserve.db ".dump" > $CONFIG_BACKUP
+        sqlite3 $DB_LOC ".dump" > $CONFIG_BACKUP
 fi
 
-sqlite3 /etc/OpenBTS/sipauthserve.db ".read /etc/OpenBTS/sipauthserve.example.sql" > /dev/null 2>&1
+sqlite3 $DB_LOC ".read /etc/OpenBTS/subscriberRegistry.example.sql" > /dev/null 2>&1
 
-SRPATH=/var/lib/asterisk/sqlite3dir/sqlite3.db
-SR_BACKUP=$SRPATH.dump-$DATE
+SR_DIR=/var/lib/asterisk/sqlite3dir
+SRPATH=$SR_DIR/sqlite3.db
+SR_CONFIG_BACKUP=$SRPATH.dump-$DATE
 
-if [[ -e $SRPATH && "`sqlite3 $SRPATH "PRAGMA table_info(sip_buddies)" || true`" != "" ]]; then
-	if [ ! -e $SR_BACKUP ]; then
-		sqlite3 $SRPATH ".dump" > $SR_BACKUP
+if [ ! -d $SR_DIR ]; then
+	mkdir -p $SR_DIR
+fi
+
+# directory permissions
+chown -R root:${WEBUSER} $SR_DIR
+chmod -R ug+rw $SR_DIR
+chmod -R o-w $SR_DIR
+
+if [[ -e $SRPATH && "`sqlite3 $SRPATH "PRAGMA table_info(sip_buddies)"`" != "" ]]; then
+	if [ ! -e $SR_CONFIG_BACKUP ]; then
+		sqlite3 $SRPATH ".dump" > $SR_CONFIG_BACKUP
 	fi
 
-	HASPREPAID=`sqlite3 $SRPATH "PRAGMA table_info(sip_buddies)" | grep prepaid || true`
+	HASPREPAID=`sqlite3 $SRPATH "PRAGMA table_info(sip_buddies)" | grep prepaid`
 	if [ "$HASPREPAID" = "" ]; then
 		sqlite3 $SRPATH "alter table sip_buddies add prepaid int(1) DEFAULT 0 not null"
 	fi
 
-	HASBALANCE=`sqlite3 $SRPATH "PRAGMA table_info(sip_buddies)" | grep account_balance || true`
+	HASBALANCE=`sqlite3 $SRPATH "PRAGMA table_info(sip_buddies)" | grep account_balance`
 	if [ "$HASBALANCE" = "" ]; then
 		sqlite3 $SRPATH "alter table sip_buddies add column account_balance int(9) default 0"
 	fi
@@ -54,10 +65,12 @@ if [[ -e $SRPATH && "`sqlite3 $SRPATH "PRAGMA table_info(sip_buddies)" || true`"
 	sqlite3 $SRPATH "insert or ignore into 'rates' values ('out-of-network-call', 1)"
 fi
 
+# set up permissions for webui, temporary fix until ui is replumbed to use json
 # directory permissions
-chown -R root:${WEBUSER} /var/lib/asterisk/sqlite3dir
-chmod -R ug+rw /var/lib/asterisk/sqlite3dir/
-chmod -R o-w /var/lib/asterisk/sqlite3dir/
+if [ -e $SRPATH ]; then
+	chmod 664 $SR_DIR/sqlite3*
+fi
+
 }
 
 case "$1" in
