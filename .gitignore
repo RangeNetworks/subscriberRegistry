@@ -1,0 +1,11 @@
+._*
+*.cgi
+build-arch-stamp
+build-indep-stamp
+comp128
+configure-stamp
+debian/debhelper.log
+debian/files
+debian/substvars
+debian/tmp/
+sipauthserve
