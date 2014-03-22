@@ -1,5 +1,10 @@
 ._*
+*.in
+*.la
+*.lo
 *.cgi
+.deps
+.libs
 build-arch-stamp
 build-indep-stamp
 comp128
