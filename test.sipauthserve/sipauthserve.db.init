@@ -2,7 +2,6 @@ BEGIN TRANSACTION;
 CREATE TABLE CONFIG ( KEYSTRING TEXT UNIQUE NOT NULL, VALUESTRING TEXT, STATIC INTEGER DEFAULT 0, OPTIONAL INTEGER DEFAULT 0, COMMENTS TEXT DEFAULT '');
 INSERT INTO "CONFIG" VALUES('SubscriberRegistry.db','sr.db',0,0,'The location of the sqlite3 database holding the subscriber registry.');
 INSERT INTO "CONFIG" VALUES('SubscriberRegistry.A3A8','../comp128',0,0,'');
-INSERT INTO "CONFIG" VALUES('SubscriberRegistry.UpstreamServer','',0,0,'');
 INSERT INTO "CONFIG" VALUES('Log.Level','INFO',0,0,'');
 INSERT INTO "CONFIG" VALUES('Log.Level.smcommands.cpp','INFO',0,0,'');
 INSERT INTO "CONFIG" VALUES('savefile','savedqueue.txt',0,0,'');

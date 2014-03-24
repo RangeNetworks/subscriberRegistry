@@ -20,11 +20,13 @@ export DH_ALWAYS_EXCLUDE=.svn:.git
 export DH_OPTIONS
 
 configure:
+	./autogen.sh
 
 config: configure-stamp
 configure-stamp: configure
 	dh_testdir
 	# Add here commands to configure the package.
+	./configure $(confflags)
 	touch configure-stamp
 
 #Architecture

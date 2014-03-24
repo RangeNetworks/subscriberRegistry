@@ -1,6 +1,6 @@
 /*
 * Copyright 2011 Kestrel Signal Processing, Inc.
-* Copyright 2011, 2012 Range Networks, Inc.
+* Copyright 2011, 2012, 2013, 2014 Range Networks, Inc.
 *
 * This software is distributed under the terms of the GNU Affero Public License.
 * See the COPYING file in the main directory for details.
@@ -33,6 +33,7 @@
 #include <iostream>
 #include <sstream>
 #include <fstream>
+#include <algorithm> // for sort()
 #include <Configuration.h>
 
 extern ConfigurationTable gConfig;
@@ -157,6 +158,15 @@ static const char* createSBTable = {
     ")"
 };
 
+static const char* createMEMSBTable = {
+    "CREATE TABLE IF NOT EXISTS memcache.mem_sip_buddies ("
+		"username              varchar(80) primary key, "
+		"ipaddr                varchar(45), "
+		"port                  int(5) default 5062, "
+		"rand                  varchar(33) default '', "
+		"sres                  varchar(33) default ''"
+    ")"
+};
 
 int SubscriberRegistry::init()
 {
@@ -202,28 +212,247 @@ int SubscriberRegistry::init()
 	if (!sqlite3_command(mDB,enableWAL,mNumSQLTries)) {
 		LOG(EMERG) << "Cannot enable WAL mode on database at " << ldb << ", error message: " << sqlite3_errmsg(mDB);
 	}
+
+#ifndef SR_API_ONLY
+	// memory based sip_buddies table
+	if (!sqlite3_command(mDB,"attach database ':memory:' as memcache",mNumSQLTries)) {
+		LOG(EMERG) << "Cannot create memcache database";
+		return 1;
+	}
+	if (!sqlite3_command(mDB,createMEMSBTable,mNumSQLTries)) {
+		LOG(EMERG) << "Cannot create memcache mem_sip_buddies table";
+		return 1;
+	}
+	if (!sqlite3_command(mDB,"INSERT INTO mem_sip_buddies SELECT username, ipaddr, port, rand, sres FROM sip_buddies",mNumSQLTries)) {
+		LOG(EMERG) << "Cannot populate mem_sip_buddies table with disk contents";
+		return 1;
+	}
+	if (!sqlite3_command(mDB,"ALTER TABLE mem_sip_buddies ADD dirty INTEGER DEFAULT 0",mNumSQLTries)) {
+		LOG(EMERG) << "Cannot add dirty column to mem_sip_buddies table";
+		return 1;
+	}
+
+	// Start the sync thread
+	mSyncer.start((void*(*)(void*))subscriberRegistrySyncer,NULL);
+#endif
+
 	return 0;
 }
 
+string SubscriberRegistry::getResultsAsString(string query)
+{
+	sqlite3_stmt *stmt;
 
+	if (sqlite3_prepare_statement(mDB, &stmt, query.c_str(), 5)) {
+		std::cout << " - sqlite3_prepare_statement() failed" << std::endl;
+ 		return "";
+	}
+
+	int state;
+	int row = 0;
+	int col;
+	int colMax = sqlite3_column_count(stmt);
+	const char* colName;
+	const char* colText;
+	ostringstream colNames;
+	ostringstream colTexts;
+	while (1) {
+		state = sqlite3_step(stmt);
+		if (state == SQLITE_ROW) {
+			for (col = 0; col < colMax; col++) {
+				colName = (const char*)sqlite3_column_name(stmt, col);
+				colText = (const char*)sqlite3_column_text(stmt, col);
+
+				if (row == 0) {
+					colNames << colName << " ";
+				}
+				if (colText == NULL) {
+					colTexts << "NULL" << " ";
+				} else {
+					colTexts << colText << " ";
+				}
+			}
+		} else if (state == SQLITE_DONE) {
+			break;
+		// TODO : handle more SQLITE_FAILURECODES here
+		} else {
+			return " - failed in while(1) in } else {";
+		}
+		colTexts << std::endl;
+		row++;
+	}
+	sqlite3_finalize(stmt);
+
+	ostringstream s;
+	string title = colNames.str();
+	if (title.length()) {
+		s << title << std::endl;
+		s << colTexts << std::endl;
+	} else {
+		s << " - none found" << std::endl;
+	}
+
+	return s.str();
+}
+
+vector<string> SubscriberRegistry::getTableColumns(string tableName)
+{
+	vector<string> colNames;
+	stringstream tmp;
+	tmp << "select * from " << tableName << " limit 1";
+
+	sqlite3_stmt *stmt;
+
+	if (sqlite3_prepare_statement(mDB, &stmt, tmp.str().c_str(), 5)) {
+		std::cout << " - getTableColumns() - sqlite3_prepare_statement() failed" << std::endl;
+ 		return colNames;
+	}
+	tmp.str("");
+
+	int state;
+	int col;
+	int colMax = sqlite3_column_count(stmt);
+	while (1) {
+		state = sqlite3_step(stmt);
+		if (state == SQLITE_ROW) {
+			for (col = 0; col < colMax; col++) {
+				tmp << (const char*)sqlite3_column_name(stmt, col);
+				colNames.push_back(tmp.str());
+				tmp.str("");
+			}
+		} else if (state == SQLITE_DONE) {
+			break;
+		// TODO : handle more SQLITE_FAILURECODES here
+		} else {
+			std::cout << " - getTableColumns() - failed in while(1) in } else {" << std::endl;
+	 		return colNames;
+		}
+	}
+	sqlite3_finalize(stmt);
+
+	return colNames;
+}
+
+#ifndef SR_API_ONLY
+string SubscriberRegistry::generateSyncToDiskQuery()
+{
+	vector<string> columns = getTableColumns("sip_buddies");
+	if (!columns.size()) {
+		LOG(DEBUG) << "sip_buddies is empty";
+		return "";
+	}
+
+	sort(columns.begin(), columns.end());
+	std::stringstream ss;
+	unsigned i;
+
+	ss << "replace into sip_buddies (ipaddr, port, rand, sres, ";
+
+	for (i = 0; i < columns.size(); i++) {
+		if (columns[i].compare("ipaddr") == 0 || columns[i].compare("port") == 0 ||
+			columns[i].compare("rand") == 0 || columns[i].compare("sres") == 0) {
+			continue;
+		}
+		if (i != 0) {
+			ss << ", ";
+		}
+
+		if (columns[i].find("-") != std::string::npos) {
+			ss << "'" << columns[i] << "'";
+		} else {
+			ss << columns[i];
+		}
+	}
+
+	ss << ") select src.ipaddr, src.port, src.rand, src.sres, ";
+
+	for (i = 0; i < columns.size(); i++) {
+		if (columns[i].compare("ipaddr") == 0 || columns[i].compare("port") == 0 ||
+			columns[i].compare("rand") == 0 || columns[i].compare("sres") == 0) {
+			continue;
+		}
+		if (i != 0) {
+			ss << ", ";
+		}
+
+		ss << "dest.";
+		if (columns[i].find("-") != std::string::npos) {
+			ss << "'" << columns[i] << "'";
+		} else {
+			ss << columns[i];
+		}
+	}
+
+	ss << " from mem_sip_buddies src ";
+	ss << "inner join sip_buddies dest on src.username = dest.username ";
+	ss << "where src.dirty = \"1\"";
+
+	return ss.str();
+}
+
+bool SubscriberRegistry::syncMemoryDB()
+{
+	bool ret = true;
+	string syncToDisk = generateSyncToDiskQuery();
+
+	string cleanDirty = "update mem_sip_buddies set dirty = \"0\"";
+
+	string syncFromDiskAddNewEntries = "INSERT INTO mem_sip_buddies "
+		"(username, ipaddr, port, rand, sres, dirty) "
+		"SELECT sip_buddies.username, sip_buddies.ipaddr, sip_buddies.port, sip_buddies.rand, sip_buddies.sres, '0' FROM sip_buddies "
+		"LEFT OUTER JOIN mem_sip_buddies ON (mem_sip_buddies.username=sip_buddies.username) "
+		"WHERE mem_sip_buddies.username IS NULL";
+
+	string syncFromDiskDeleteOldEntries = "DELETE FROM mem_sip_buddies "
+		"WHERE username IN "
+		"(SELECT mem_sip_buddies.username FROM mem_sip_buddies"
+		" LEFT JOIN sip_buddies ON mem_sip_buddies.username=sip_buddies.username"
+		" WHERE sip_buddies.username IS NULL"
+		")";
+
+	Timeval timer;
+	mLock.lock();
+
+	// this string is only non-empty if there are entries in sip_buddies
+	if (syncToDisk.length()) {
+		// sync dirty entries to disk
+		if (sqlUpdate(syncToDisk.c_str()) == FAILURE) {
+			LOG(ERR) << "syncToDisk failed";
+		} else {
+			// if it succeeds, mark these entries as clean again
+			LOG(INFO) << "syncToDisk succeeded";
+			if (sqlUpdate(cleanDirty.c_str()) == FAILURE) {
+				LOG(ERR) << "cleanDirty failed";
+			} else {
+				LOG(INFO) << "cleanDirty succeeded";
+			}
+		}
+
+		// sync new rows from the disk into memory
+		if (sqlUpdate(syncFromDiskAddNewEntries.c_str()) == FAILURE) {
+			LOG(ERR) << "syncFromDiskAddNewEntries failed";
+		} else {
+			LOG(INFO) << "syncFromDiskAddNewEntries succeeded";
+		}
+	}
+
+	// delete old entries from memory no longer found on the disk
+	if (sqlUpdate(syncFromDiskDeleteOldEntries.c_str()) == FAILURE) {
+		LOG(ERR) << "syncFromDiskDeleteOldEntries failed";
+	} else {
+		LOG(INFO) << "syncFromDiskDeleteOldEntries succeeded";
+	}
+
+	mLock.unlock();
+	LOG(INFO) << "syncMemoryDB() locked the db for " << timer.elapsed() << "ms";
+
+	return ret;
+}
+#endif
 
 SubscriberRegistry::~SubscriberRegistry()
 {
 	if (mDB) sqlite3_close(mDB);
-}
-
-
-
-SubscriberRegistry::Status SubscriberRegistry::sqlHttp(const char *stmt, char **resultptr)
-{
-	LOG(INFO) << stmt;
-	HttpQuery qry("sql");
-	qry.send("stmts", stmt);
-	if (!qry.http(false)) return FAILURE;
-	const char *res = qry.receive("res");
-	if (!res) return FAILURE; 
-	*resultptr = strdup(res);
-	return SUCCESS;
 }
 
 
@@ -273,19 +502,7 @@ char *SubscriberRegistry::sqlQuery(const char *unknownColumn, const char *table,
 		LOG(INFO) << "result = " << result;
 		return result;
 	}
-	// didn't find locally, so try over http
-	st = sqlHttp(os.str().c_str(), &result);
-	if ((st == SUCCESS) && result) {
-		// found over http but not locally, so cache locally
-		ostringstream os2;
-		os2 << "insert into " << table << "(" << knownColumn << ", " << unknownColumn << ") values (\"" <<
-			knownValue << "\",\"" << result << "\")";
-		// ignore whether it succeeds
-		sqlLocal(os2.str().c_str(), NULL);
-		LOG(INFO) << "result = " << result;
-		return result;
-	}
-	// didn't find locally or over http
+	// didn't find locally
 	LOG(INFO) << "not found: " << os.str();
 	return NULL;
 }
@@ -295,31 +512,47 @@ char *SubscriberRegistry::sqlQuery(const char *unknownColumn, const char *table,
 SubscriberRegistry::Status SubscriberRegistry::sqlUpdate(const char *stmt)
 {
 	LOG(INFO) << stmt;
-	SubscriberRegistry::Status st = sqlLocal(stmt, NULL);
-	sqlHttp(stmt, NULL);
-	// status of local is only important one because asterisk talks to that db directly
-	// must update local no matter what
-	return st;
+ 	return sqlLocal(stmt, NULL);
 }
 
 string SubscriberRegistry::imsiGet(string imsi, string key)
 {
 	string name = imsi.substr(0,4) == "IMSI" ? imsi : "IMSI" + imsi;
-	char *st = sqlQuery(key.c_str(), "sip_buddies", "name", imsi.c_str());
+	char *st = sqlQuery(key.c_str(), "sip_buddies", "username", name.c_str());
 	if (!st) {
-		LOG(WARNING) << "cannot get key " << key << " for username " << imsi;
+		LOG(INFO) << "cannot get key " << key << " for username " << name;
 		return "";
 	}
 	return st;
 }
 
+#ifndef SR_API_ONLY
 bool SubscriberRegistry::imsiSet(string imsi, string key, string value)
 {
 	string name = imsi.substr(0,4) == "IMSI" ? imsi : "IMSI" + imsi;
 	ostringstream os;
-	os << "update sip_buddies set " << key << " = \"" << value << "\" where name = \"" << name << "\"";
-	return sqlUpdate(os.str().c_str()) == FAILURE;
+	os << "update mem_sip_buddies set dirty = \"1\", " << key << " = \"" << value << "\" where username = \"" << name << "\"";
+
+	mLock.lock();
+	SubscriberRegistry::Status ret = sqlUpdate(os.str().c_str());
+	mLock.unlock();
+
+	return ret == FAILURE;
 }
+
+bool SubscriberRegistry::imsiSet(string imsi, string key1, string value1, string key2, string value2)
+{
+	string name = imsi.substr(0,4) == "IMSI" ? imsi : "IMSI" + imsi;
+	ostringstream os;
+	os << "update mem_sip_buddies set dirty = \"1\", " << key1 << " = \"" << value1 << "\"," << key2 << " = \"" << value2 << "\" where username = \"" << name << "\"";
+
+	mLock.lock();
+	SubscriberRegistry::Status ret = sqlUpdate(os.str().c_str());
+	mLock.unlock();
+
+	return ret == FAILURE;
+}
+#endif
 
 char *SubscriberRegistry::getIMSI(const char *ISDN)
 {
@@ -431,34 +664,6 @@ SubscriberRegistry::Status SubscriberRegistry::addUser(const char* IMSI, const c
 }
 
 
-// For handover.  Only remove the local cache.  BS2 will have updated the global.
-SubscriberRegistry::Status SubscriberRegistry::removeUser(const char* IMSI)
-{
-	if (!IMSI) {
-		LOG(WARNING) << "SubscriberRegistry::addUser attempting add of NULL IMSI";
-		return FAILURE;
-	}
-	LOG(INFO) << "removeUser(" << IMSI << ")";
-	string server = gConfig.getStr("SubscriberRegistry.UpstreamServer");
-	if (server.length() == 0) {
-		LOG(INFO) << "not removing user if no upstream server";
-		return FAILURE;
-	}
-	ostringstream os;
-	os << "delete from sip_buddies where name = ";
-	os << "\"" << IMSI << "\"";
-	os << ";";
-	LOG(INFO) << os.str();
-	SubscriberRegistry::Status st = sqlLocal(os.str().c_str(), NULL);
-	ostringstream os2;
-	os2 << "delete from dialdata_table where dial = ";
-	os2 << "\"" << IMSI << "\"";
-	LOG(INFO) << os2.str();
-	SubscriberRegistry::Status st2 = sqlLocal(os2.str().c_str(), NULL);
-	return st == SUCCESS && st2 == SUCCESS ? SUCCESS : FAILURE;
-}
-
-
 
 char *SubscriberRegistry::mapCLIDGlobal(const char *local)
 {
@@ -487,307 +692,17 @@ SubscriberRegistry::Status SubscriberRegistry::RRLPUpdate(string name, string la
 	return sqlUpdate(os.str().c_str());
 }
 
-
-
-string SubscriberRegistry::getRandForAuthentication(bool sip, string IMSI)
+#ifndef SR_API_ONLY
+extern SubscriberRegistry gSubscriberRegistry;
+void* subscriberRegistrySyncer(void*)
 {
-	if (IMSI.length() == 0) {
-		LOG(WARNING) << "SubscriberRegistry::getRandForAuthentication attempting lookup of NULL IMSI";
-		return "";
-	}
-	LOG(INFO) << "getRandForAuthentication(" << IMSI << ")";
-	// get rand from SR server
-	HttpQuery qry("rand");
-	qry.send("imsi", IMSI);
-	qry.log();
-	if (!qry.http(sip)) return "";
-	return qry.receive("rand");
-}
-
-bool SubscriberRegistry::getRandForAuthentication(bool sip, string IMSI, uint64_t *hRAND, uint64_t *lRAND)
-{
-	string strRAND = getRandForAuthentication(sip, IMSI);
-	if (strRAND.length() == 0) {
-		*hRAND = 0;
-		*lRAND = 0;
-		return false;
-	}
-	stringToUint(strRAND, hRAND, lRAND);
-	return true;
-}
-
-void SubscriberRegistry::stringToUint(string strRAND, uint64_t *hRAND, uint64_t *lRAND)
-{
-	assert(strRAND.size() == 32);
-	string strhRAND = strRAND.substr(0, 16);
-	string strlRAND = strRAND.substr(16, 16);
-	stringstream ssh;
-	ssh << hex << strhRAND;
-	ssh >> *hRAND;
-	stringstream ssl;
-	ssl << hex << strlRAND;
-	ssl >> *lRAND;
-}
-
-string SubscriberRegistry::uintToString(uint64_t h, uint64_t l)
-{
-	ostringstream os1;
-	os1.width(16);
-	os1.fill('0');
-	os1 << hex << h;
-	ostringstream os2;
-	os2.width(16);
-	os2.fill('0');
-	os2 << hex << l;
-	ostringstream os3;
-	os3 << os1.str() << os2.str();
-	return os3.str();
-}
-
-string SubscriberRegistry::uintToString(uint32_t x)
-{
-	ostringstream os;
-	os.width(8);
-	os.fill('0');
-	os << hex << x;
-	return os.str();
-}
-
-SubscriberRegistry::Status SubscriberRegistry::authenticate(bool sip, string IMSI, uint64_t hRAND, uint64_t lRAND, uint32_t SRES)
-{
-	string strRAND = uintToString(hRAND, lRAND);
-	string strSRES = uintToString(SRES);
-	return authenticate(sip, IMSI, strRAND, strSRES);
-}
-
-
-SubscriberRegistry::Status SubscriberRegistry::authenticate(bool sip, string IMSI, string rand, string sres)
-{
-	if (IMSI.length() == 0) {
-		LOG(WARNING) << "SubscriberRegistry::authenticate attempting lookup of NULL IMSI";
-		return FAILURE;
-	}
-	LOG(INFO) << "authenticate(" << IMSI << "," << rand << "," << sres << ")";
-	HttpQuery qry("auth");
-	qry.send("imsi", IMSI);
-	qry.send("rand", rand);
-	qry.send("sres", sres);
-	qry.log();
-	if (!qry.http(sip)) return FAILURE;
-	const char *status = qry.receive("status");
-	if (strcmp(status, "SUCCESS") == 0) return SUCCESS;
-	if (strcmp(status, "FAILURE") == 0) return FAILURE;
-	// status is Kc
-	return SUCCESS;
-}
-
-
-
-bool SubscriberRegistry::useGateway(const char* ISDN)
-{
-	// FIXME -- Do something more general in Asterisk.
-	// This is a hack for Burning Man.
-	int cmp = strncmp(ISDN,"88351000125",11);
-	return cmp!=0;
-}
-
-
-
-SubscriberRegistry::Status SubscriberRegistry::setPrepaid(const char *IMSI, bool yes)
-{
-	ostringstream os;
-	os << "update sip_buddies set prepaid = " << (yes ? 1 : 0)  << " where username = " << '"' << IMSI << '"';
-	return sqlUpdate(os.str().c_str());
-}
-
-
-SubscriberRegistry::Status SubscriberRegistry::isPrepaid(const char *IMSI, bool &yes)
-{
-	char *st = sqlQuery("prepaid", "sip_buddies", "username", IMSI);
-	if (!st) {
-		LOG(NOTICE) << "cannot get prepaid status for username " << IMSI;
-		return FAILURE;
-	}
-	yes = *st == '1';
-	free(st);
-	return SUCCESS;
-}
-
-
-SubscriberRegistry::Status SubscriberRegistry::balanceRemaining(const char *IMSI, int &balance)
-{
-	char *st = sqlQuery("account_balance", "sip_buddies", "username", IMSI);
-	if (!st) {
-		LOG(NOTICE) << "cannot get balance for " << IMSI;
-		return FAILURE;
-	}
-	balance = (int)strtol(st, (char **)NULL, 10);
-	free(st);
-	return SUCCESS;
-}
-
-
-SubscriberRegistry::Status SubscriberRegistry::addMoney(const char *IMSI, int moneyToAdd)
-{
-	ostringstream os;
-	os << "update sip_buddies set account_balance = account_balance + " << moneyToAdd << " where username = " << '"' << IMSI << '"';
-	if (sqlUpdate(os.str().c_str()) == FAILURE) {
-		LOG(NOTICE) << "cannot update rate for username " << IMSI;
-		return FAILURE;
-	}
-	return SUCCESS;
-}
-
-int SubscriberRegistry::serviceCost(const char* service)
-{
-	char *rateSt = sqlQuery("rate", "rates", "service", service);
-	if (!rateSt) {
-		LOG(ALERT) << "cannot get rate for service " << service;
-		return -1;
-	}
-	int rate = (int)strtol(rateSt, (char **)NULL, 10);
-	free(rateSt);
-	return rate;
-}
-
-SubscriberRegistry::Status SubscriberRegistry::serviceUnits(const char *IMSI, const char* service, int &units)
-{
-	int balance;
-	Status stat = balanceRemaining(IMSI,balance);
-	if (stat == FAILURE) return FAILURE;
-	int rate = serviceCost(service);
-	if (rate<0) return FAILURE;
-	units = balance / rate;
-	return SUCCESS;
-}
-
-
-
-HttpQuery::HttpQuery(const char *req)
-{
-	sends = map<string,string>();
-	sends["req"] = req;
-	receives = map<string,string>();
-}
-
-void HttpQuery::send(const char *label, string value)
-{
-	sends[label] = value;
-}
-
-void HttpQuery::log()
-{
-	ostringstream os;
-	bool first = true;
-	for (map<string,string>::iterator it = sends.begin(); it != sends.end(); it++) {
-		if (first) {
-			first = false;
-		} else {
-			os << "&";
-		}
-		os << it->first << "=" << it->second;
-	}
-	LOG(INFO) << os.str();
-}
-
-bool HttpQuery::http(bool sip)
-{
-	// unique temporary file names
-	ostringstream os1;
-	ostringstream os2;
-	os1 << "/tmp/subscriberregistry.1." << getpid();
-	os2 << "/tmp/subscriberregistry.2." << getpid();
-	string tmpFile1 = os1.str();
-	string tmpFile2 = os2.str();
-
-	// write the request and params to temp file
-	ofstream file1(tmpFile1.c_str());
-	if (file1.fail()) {
-		LOG(ERR) << "HttpQuery::http: can't write " << tmpFile1.c_str();
-		return false;
-	}
-	bool first = true;
-	for (map<string,string>::iterator it = sends.begin(); it != sends.end(); it++) {
-		if (first) {
-			first = false;
-		} else {
-			file1 << "&";
-		}
-		file1 << it->first << "=" << it->second;
-	}
-	file1.close();
-
-	// call the server
-	string server = sip ? 
-		gConfig.getStr("SIP.Proxy.Registration"):
-		gConfig.getStr("SubscriberRegistry.UpstreamServer");
-	if (server.length() == 0 && !sip) return false;
-	ostringstream os;
-	os << "curl -s --data-binary @" << tmpFile1.c_str() << " " << server << " > " << tmpFile2.c_str();
-	LOG(INFO) << os.str();
-	if (server == "testing") {
-		return false;
-	} else {
-		int st = system(os.str().c_str());
-		if (st != 0) {
-			LOG(ERR) << "curl call returned " << st;
-			return false;
-		}
+	while (true) {
+		sleep(15);
+		gSubscriberRegistry.syncMemoryDB();
 	}
 
-	// read the http return from another temp file
-	ifstream file2(tmpFile2.c_str());
-	if (file2.fail()) {
-		LOG(ERR) << "HTTPQuery::http: can't read " << tmpFile2.c_str();
-		return false;
-	}
-	string tmp;
-	while (getline(file2, tmp)) {
-		size_t pos = tmp.find('=');
-		if (pos != string::npos) {
-			string key = tmp.substr(0, pos);
-			string value = tmp.substr(pos+1);
-			if (key == "error") {
-				LOG(ERR) << "HTTPQuery::http error: " << value;
-				file2.close();
-				return false;
-			}
-			receives[key] = value;
-		} else {
-			file2.close();
-			LOG(ERR) << "HTTPQuery::http: bad server return:";
-			ifstream file22(tmpFile2.c_str());
-			while (getline(file22, tmp)) {
-				LOG(ERR) << tmp;
-			}
-			file22.close();
-			return false;
-		}
-	}
-	file2.close();
-	return true;
+	return NULL;
 }
-
-const char *HttpQuery::receive(const char *label)
-{
-	map<string,string>::iterator it = receives.find(label);
-	return it == receives.end() ? NULL : it->second.c_str();
-}
-
-
-
-
-
-
-
+#endif
 
 // vim: ts=4 sw=4
-
-
-
-
-
-
-
-
-

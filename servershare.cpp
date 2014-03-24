@@ -29,6 +29,7 @@
 #include <fstream>
 #include <cstdlib>
 #include <Configuration.h>
+#include <Utils.h>
 #include <string.h>
 
 #include "servershare.h"
@@ -50,18 +51,6 @@ ConfigurationKeyMap getConfigurationKeys()
 {
 	ConfigurationKeyMap map;
 	ConfigurationKey *tmp;
-
-	tmp = new ConfigurationKey("SIP.Proxy.Registration","127.0.0.1:5064",
-		"",
-		ConfigurationKey::CUSTOMERWARN,
-		ConfigurationKey::IPANDPORT,
-		"",
-		false,
-		"The IP host and port of the proxy to be used for registration and authentication.  "
-			"This should normally be the subscriber registry SIP interface, not Asterisk."
-	);
-	map[tmp->getName()] = *tmp;
-	delete tmp;
 
 	tmp = new ConfigurationKey("SubscriberRegistry.A3A8","/OpenBTS/comp128",
 		"",
@@ -85,28 +74,6 @@ ConfigurationKeyMap getConfigurationKeys()
 	map[tmp->getName()] = *tmp;
 	delete tmp;
 
-	tmp = new ConfigurationKey("SubscriberRegistry.Manager.Title","Subscriber Registry",
-		"",
-		ConfigurationKey::CUSTOMER,
-		ConfigurationKey::STRING,
-		"^[[:print:]]+$",
-		false,
-		"Title text to be displayed on the subscriber registry manager."
-	);
-	map[tmp->getName()] = *tmp;
-	delete tmp;
-
-	tmp = new ConfigurationKey("SubscriberRegistry.Manager.VisibleColumns","name username type context host",
-		"",
-		ConfigurationKey::CUSTOMERTUNE,
-		ConfigurationKey::STRING,
-		"^(name){0,1} (username){0,1} (type){0,1} (context){0,1} (host){0,1}$",
-		false,
-		"A space separated list of columns to display in the subscriber registry manager."
-	);
-	map[tmp->getName()] = *tmp;
-	delete tmp;
-
 	tmp = new ConfigurationKey("SubscriberRegistry.Port","5064",
 		"",
 		ConfigurationKey::CUSTOMERWARN,
@@ -118,56 +85,7 @@ ConfigurationKeyMap getConfigurationKeys()
 	map[tmp->getName()] = *tmp;
 	delete tmp;
 
-	tmp = new ConfigurationKey("SubscriberRegistry.UpstreamServer","",
-		"",
-		ConfigurationKey::CUSTOMERWARN,
-		ConfigurationKey::STRING_OPT,// audited
-		"",
-		false,
-		"URL of the subscriber registry HTTP interface on the upstream server.  "
-			"By default, this feature is disabled.  "
-			"To enable, specify a server URL eg: http://localhost/cgi/subreg.cgi.  "
-			"To disable again, execute \"unconfig SubscriberRegistry.UpstreamServer\"."
-	);
-	map[tmp->getName()] = *tmp;
-	delete tmp;
-
 	return map;
-}
-
-string imsiGet(string imsi, string key)
-{
-	string name = imsi.substr(0,4) == "IMSI" ? imsi : "IMSI" + imsi;
-	char *value;
-	if (!sqlite3_single_lookup(gSubscriberRegistry.db(), "sip_buddies", "username", name.c_str(), key.c_str(), value)) {
-		return "";
-	}
-	if (!value) { return ""; }
-	string retValue = value;
-	free(value);
-	return retValue;
-}
-
-void imsiSet(string imsi, string key, string value)
-{
-	string name = imsi.substr(0,4) == "IMSI" ? imsi : "IMSI" + imsi;
-	ostringstream os2;
-	os2 << "update sip_buddies set " << key << " = \"" << value << "\" where username = \"" << name << "\"";
-	if (!sqlite3_command(gSubscriberRegistry.db(), os2.str().c_str())) {
-		LOG(ERR) << "sqlite3_command problem";
-		return;
-	}
-}
-
-void imsiSet(string imsi, string key1, string value1, string key2, string value2)
-{
-	string name = imsi.substr(0,4) == "IMSI" ? imsi : "IMSI" + imsi;
-	ostringstream os2;
-	os2 << "update sip_buddies set " << key1 << " = \"" << value1 << "\"," << key2 << " = \"" << value2 << "\" where username = \"" << name << "\"";
-	if (!sqlite3_command(gSubscriberRegistry.db(), os2.str().c_str())) {
-		LOG(ERR) << "sqlite3_command problem";
-		return;
-	}
 }
 
 string soGenerateIt()
@@ -180,20 +98,18 @@ string soGenerateIt()
 	return os.str();
 }
 
-
-
 // generate a 128' random number
 string generateRand(string imsi)
 {
-	string ki = imsiGet(imsi, "ki");
+	string ki = gSubscriberRegistry.imsiGet(imsi, "ki");
 	string ret;
 	if (ki.length() != 0) {
 		LOG(INFO) << "ki is known";
 		// generate and return rand (clear any cached rand or sres)
-		imsiSet(imsi, "rand", "", "sres", "");
+		gSubscriberRegistry.imsiSet(imsi, "rand", "", "sres", "");
 		ret = soGenerateIt();
 	} else {
-		string wRand = imsiGet(imsi, "rand");
+		string wRand = gSubscriberRegistry.imsiGet(imsi, "rand");
 		if (wRand.length() != 0) {
 			LOG(INFO) << "ki is unknown, rand is cached";
 			// return cached rand
@@ -202,7 +118,7 @@ string generateRand(string imsi)
 			LOG(INFO) << "ki is unknown, rand is not cached";
 			// generate rand, cache rand, clear sres, and return rand
 			wRand = soGenerateIt();
-			imsiSet(imsi, "rand", wRand, "sres", "");
+			gSubscriberRegistry.imsiSet(imsi, "rand", wRand, "sres", "");
 			ret = wRand;
 		}
 	}
@@ -246,8 +162,8 @@ bool randEqual(string a, string b)
 	if (a.empty() || b.empty())
 		return false;
 
-	gSubscriberRegistry.stringToUint(a, &rand1h, &rand1l);
-	gSubscriberRegistry.stringToUint(b, &rand2h, &rand2l);
+	Utils::stringToUint(a, &rand1h, &rand1l);
+	Utils::stringToUint(b, &rand2h, &rand2l);
 
 	LOG(DEBUG) << "rand1h = " << rand1h << ", rand1l = " << rand1l;
 	LOG(DEBUG) << "rand2h = " << rand2h << ", rand2l = " << rand2l;
@@ -260,40 +176,31 @@ bool randEqual(string a, string b)
 // may cache sres and rand
 bool authenticate(string imsi, string randx, string sres, string *kc)
 {
-	string ki = imsiGet(imsi, "ki");
+	string ki = gSubscriberRegistry.imsiGet(imsi, "ki");
 	bool ret;
 	if (ki.length() == 0) {
 		// Ki is unknown
-		string upstream_server = gConfig.getStr("SubscriberRegistry.UpstreamServer");
-		if (upstream_server.length()) {
-			LOG(INFO) << "ki unknown, upstream server";
-			// there's an upstream server for authentication.
-			// TODO - call the upstream server
-			ret = false;
+		string sres2 = gSubscriberRegistry.imsiGet(imsi, "sres");
+		if (sres2.length() == 0) {
+			LOG(INFO) << "ki unknown, no upstream server, sres not cached";
+			// first time - cache sres and rand so next time
+			// correct cell phone will calc same sres from same rand
+			gSubscriberRegistry.imsiSet(imsi, "sres", sres, "rand", randx);
+			ret = true;
 		} else {
-			// there's no upstream server for authentication.  fake it.
-			string sres2 = imsiGet(imsi, "sres");
-			if (sres2.length() == 0) {
-				LOG(INFO) << "ki unknown, no upstream server, sres not cached";
-				// first time - cache sres and rand so next time
-				// correct cell phone will calc same sres from same rand
-				imsiSet(imsi, "sres", sres, "rand", randx);
-				ret = true;
-			} else {
-				LOG(INFO) << "ki unknown, no upstream server, sres cached";
-				// check against cached values of rand and sres
-				string rand2 = imsiGet(imsi, "rand");
-				// TODO - on success, compute and return kc
-				LOG(DEBUG) << "comparing " << sres << " to " << sres2 << " and " << randx << " to " << rand2;
-				ret = sresEqual(sres, sres2) && randEqual(randx, rand2);
-			}
+			LOG(INFO) << "ki unknown, no upstream server, sres cached";
+			// check against cached values of rand and sres
+			string rand2 = gSubscriberRegistry.imsiGet(imsi, "rand");
+			// TODO - on success, compute and return kc
+			LOG(DEBUG) << "comparing " << sres << " to " << sres2 << " and " << randx << " to " << rand2;
+			ret = sresEqual(sres, sres2) && randEqual(randx, rand2);
 		}
 	} else {
 		LOG(INFO) << "ki known";
 		// Ki is known, so do normal authentication
 		ostringstream os;
 		// per user value from subscriber registry
-		string a3a8 = imsiGet(imsi, "a3_a8");
+		string a3a8 = gSubscriberRegistry.imsiGet(imsi, "a3_a8");
 		if (a3a8.length() == 0) {
 			// config value is default
 			a3a8 = gConfig.getStr("SubscriberRegistry.A3A8");
@@ -326,62 +233,6 @@ bool authenticate(string imsi, string randx, string sres, string *kc)
 	}
 	LOG(INFO) << "returning = " << ret;
 	return ret;
-}
-
-void decodeQuery(map<string,string> &args)
-{
-	string query;
-	// this works for GET or POST.
-	// get the request method
-	char *g = getenv("REQUEST_METHOD");
-	string method = g ? g : "";
-	LOG(INFO) << "REQUEST_METHOD = " << g;
-	// if POST, then read from stdin the number of bytes specified in CONTENT_LENGTH, and that's the query
-	if (method == "POST") {
-		int lth = atoi(getenv("CONTENT_LENGTH"));
-		LOG(INFO) << "CONTENT_LENGTH = " << lth;
-		char *buf = new char[lth+1];
-		cin.get(buf, lth+1);
-		int nread = cin.gcount();
-		if (nread != lth) {
-			LOG(ERR) << "content length changed to " << nread;
-			lth = nread;
-		}
-		query = string(buf, lth);
-		LOG(INFO) << "QUERY = " << query;
-		delete[] buf;
-	// if GET, then the query is in the environment variable QUERY_STRING
-	} else if (method == "GET") {
-		char *q = getenv("QUERY_STRING");
-		query = q ? q : "";
-		LOG(INFO) << "QUERY_STRING = " << q;
-	}
-	if (query.length() != 0) {
-		// fields of http request are separated with "&"
-		vector<string> fields;
-		split('&', query, &fields);
-		vector<string>::iterator it;
-		for (it = fields.begin(); it != fields.end(); it++) {
-			string field = *it;
-			size_t p = field.find('=');
-			string key = field.substr(0, p);
-			string value = field.substr(p+1);
-			p = 0;
-			while (1) {
-				size_t q = value.find('%', p);
-				if (q == string::npos) break;
-				string hex = value.substr(q+1, 2);
-				char s[2];
-				strcpy(s, "x");
-				int i;
-				sscanf(hex.c_str(), "%x", &i);
-				s[0] = i;
-				string hexx = s;
-				value.replace(q, 3, hexx);
-			}
-			args[key] = value;
-		}
-	}
 }
 
 string join(string separator, vector<string> &strings)

@@ -20,32 +20,14 @@
 
 include $(top_srcdir)/Makefile.common
 
-DESTDIR := 
+AM_CPPFLAGS = $(STD_DEFINES_AND_INCLUDES)
+AM_CXXFLAGS = -Wall
 
-AM_CPPFLAGS = $(STD_DEFINES_AND_INCLUDES) $(WITH_INCLUDES)
-AM_CXXFLAGS = -Wall -pthread -ldl
+noinst_LTLIBRARIES = libglobals.la
 
-noinst_LTLIBRARIES = libSR.la
+libglobals_la_SOURCES = Globals.cpp
 
-libSR_la_SOURCES = \
-	SubscriberRegistry.cpp
+noinst_PROGRAMS = 
 
 noinst_HEADERS = \
-	SubscriberRegistry.h
-
-# Order must be preserved
-SUBDIRS = \
-	config \
-	sqlite3 \
-	CommonLibs \
-	Globals \
-	NodeManager \
-	apps
-
-install: all
-	$(MAKE) -C ./apps install
-
-dox: FORCE
-	doxygen doxconfig
-
-FORCE:
+	Globals.h

@@ -1,6 +1,6 @@
 /*
 * Copyright 2011 Kestrel Signal Processing, Inc.
-* Copyright 2011 Range Networks, Inc.
+* Copyright 2011, 2014 Range Networks, Inc.
 *
 * This software is distributed under the terms of the GNU Affero Public License.
 * See the COPYING file in the main directory for details.
@@ -44,7 +44,9 @@
 #include <unistd.h>
 
 #include <Logger.h>
-#include <Configuration.h>
+#include <Globals.h>
+#include <NodeManager.h>
+#include <JSONDB.h>
 #include "servershare.h"
 #include "SubscriberRegistry.h"
 
@@ -57,6 +59,29 @@ int my_udp_port;
 
 // just using this for the database access
 SubscriberRegistry gSubscriberRegistry;
+
+/** The remote node manager. */ 
+NodeManager gNodeManager;
+
+/** The JSON<->DB interface. */ 
+JSONDB gJSONDB;
+
+/** Application specific NodeManager logic for handling requests. */
+JsonBox::Object nmHandler(JsonBox::Object& request)
+{ 
+	JsonBox::Object response;
+	std::string command = request["command"].getString();
+	std::string action = request["action"].getString();
+
+	if (command.compare("subscribers") == 0) {
+		request["table"] = JsonBox::Value("subscribers");
+		response = gJSONDB.query(request);
+	} else {
+		response["code"] = JsonBox::Value(501);
+	}
+
+	return response;
+}
 
 void prettyPrint(const char *label, osip_message_t *sip)
 {
@@ -73,14 +98,13 @@ void prettyPrint(const char *label, osip_message_t *sip)
 
 string imsiFromSip(osip_message_t *sip)
 {
-	int i;
 	char *dest;
 	osip_uri_t *fromUri = osip_from_get_url(sip->from);
 	if (!fromUri) {
 		LOG(ERR) << "osip_from_get_url problem";
 		return "";
 	}
-	i = osip_uri_to_str(fromUri, &dest);
+	osip_uri_to_str(fromUri, &dest);
 	string imsi = dest;
 	osip_free(dest);
 	return imsi;
@@ -88,14 +112,13 @@ string imsiFromSip(osip_message_t *sip)
 
 string imsiToSip(osip_message_t *sip)
 {
-	int i;
 	char *dest;
 	osip_uri_t *toUri = osip_to_get_url(sip->to);
 	if (!toUri) {
 		LOG(ERR) << "osip_to_get_url problem";
 		return "";
 	}
-	i = osip_uri_to_str(toUri, &dest);
+	osip_uri_to_str(toUri, &dest);
 	string imsi = dest;
 	osip_free(dest);
 	return imsi;
@@ -104,7 +127,7 @@ string imsiToSip(osip_message_t *sip)
 // is imsi in the database?
 bool imsiFound(string imsi)
 {
-	string x = imsiGet(imsi, "id");
+	string x = gSubscriberRegistry.imsiGet(imsi, "id");
 	return x.length() != 0;
 }
 
@@ -180,7 +203,7 @@ char *processBuffer(char *buffer)
                 osip_message_set_status_code (response, 200);
                 osip_message_set_reason_phrase (response, osip_strdup("OK"));
                 LOG(INFO) << "success, registering for IP address " << remote_host;
-                imsiSet(imsi,"ipaddr", remote_host, "port", remote_port);
+                gSubscriberRegistry.imsiSet(imsi,"ipaddr", remote_host, "port", remote_port);
 	} else {
 		// look for rand and sres in Authorization header (assume imsi same as in from)
 		string randx;
@@ -238,9 +261,19 @@ char *processBuffer(char *buffer)
 					i = osip_list_add (&response->authentication_infos, auth, -1);
 					if (i < 0) LOG(ERR) << "problem adding authentication_infos";
 				}
+				// (pat 9-2013) Add the caller id.
+				static string calleridstr("callerid");
+				string callid = gSubscriberRegistry.imsiGet(imsi,calleridstr);
+				if (callid.size()) {
+					char buf[120];
+					// Per RFC3966 the telephone numbers should begin with "+" only if it is globally unique throughout the world.
+					// We should not add the "+" here, it should be in the database if appropriate.
+					snprintf(buf,120,"<tel:%s>",callid.c_str());
+					osip_message_set_header(response,"P-Associated-URI",buf);
+				}
 				// And register it.
 				LOG(INFO) << "success, registering for IP address " << remote_host;
-				imsiSet(imsi,"ipaddr", remote_host, "port", remote_port);
+				gSubscriberRegistry.imsiSet(imsi,"ipaddr", remote_host, "port", remote_port);
 			} else {
 				// sres does not match rand => 401 Unauthorized
 				osip_message_set_status_code (response, 401);
@@ -269,6 +302,24 @@ char *processBuffer(char *buffer)
 int
 main(int argc, char **argv)
 {
+	// TODO: Properly parse and handle any arguments
+	if (argc > 1) {
+		for (int argi = 0; argi < argc; argi++) {
+			if (!strcmp(argv[argi], "--version") ||
+			    !strcmp(argv[argi], "-v")) {
+				cout << gVersionString << endl;
+			}
+			if (!strcmp(argv[argi], "--gensql")) {
+				cout << gConfig.getDefaultSQL(string(argv[0]), gVersionString) << endl;
+			}
+			if (!strcmp(argv[argi], "--gentex")) {
+				cout << gConfig.getTeX(string(argv[0]), gVersionString) << endl;
+			}
+		}
+
+		return 0;
+	}
+
 	sockaddr_in si_me;
 	sockaddr_in si_other;
 	int aSocket;
@@ -278,13 +329,15 @@ main(int argc, char **argv)
 	srand ( time(NULL) + (int)getpid() );
 	my_udp_port = gConfig.getNum("SubscriberRegistry.Port");
 	gSubscriberRegistry.init();
+	gNodeManager.setAppLogicHandler(&nmHandler);
+	gNodeManager.start(45064);
 
 	// init osip lib
 	osip_t *osip;
 	int i=osip_init(&osip);
 	if (i!=0) {
 		LOG(ALERT) << "cannot init sip lib";
-		return NULL;
+		exit(1);
 	}
 
 	if ((aSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1) {

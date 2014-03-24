@@ -20,32 +20,11 @@
 
 include $(top_srcdir)/Makefile.common
 
-DESTDIR := 
+# Install m4 macros in this directory
+m4datadir = $(datadir)/aclocal
 
-AM_CPPFLAGS = $(STD_DEFINES_AND_INCLUDES) $(WITH_INCLUDES)
-AM_CXXFLAGS = -Wall -pthread -ldl
+# List your m4 macros here
+m4macros = \
+	pkg.m4
 
-noinst_LTLIBRARIES = libSR.la
-
-libSR_la_SOURCES = \
-	SubscriberRegistry.cpp
-
-noinst_HEADERS = \
-	SubscriberRegistry.h
-
-# Order must be preserved
-SUBDIRS = \
-	config \
-	sqlite3 \
-	CommonLibs \
-	Globals \
-	NodeManager \
-	apps
-
-install: all
-	$(MAKE) -C ./apps install
-
-dox: FORCE
-	doxygen doxconfig
-
-FORCE:
+EXTRA_DIST = $(m4macros) 

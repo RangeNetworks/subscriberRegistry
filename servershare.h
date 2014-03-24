@@ -35,31 +35,6 @@ using namespace std;
 ConfigurationKeyMap getConfigurationKeys();
 
 /**
-	Get a subscriber's property.
-	@param imsi imsi of the subscriber
-	@param key name of the property
-*/
-string imsiGet(string imsi, string key);
-
-/**
-	Set a subscriber's property.
-	@param imsi imsi of the subscriber
-	@param key name of the property
-	@param value value of the property
-*/
-void imsiSet(string imsi, string key, string value);
-
-/**
-	Set a subscriber's property.
-	@param imsi imsi of the subscriber
-	@param key1 name of the property
-	@param value1 value of the property
-	@param key2 name of the property
-	@param value2 value of the property
-*/
-void imsiSet(string imsi, string key1, string value1, string key2, string value2);
-
-/**
 	Generate a 128-bit random number.
 	@param imsi imsi of subscriber the random number is for
 */
@@ -72,12 +47,6 @@ string generateRand(string imsi);
 	@param sres corresponsing sres
 */
 bool authenticate(string imsi, string rand, string sres, string *kc);
-
-/**
-	Decode the html query.
-	@param args mapping of query key->value pairs.
-*/
-void decodeQuery(map<string,string> &args);
 
 /**
 	Join the strings in strings, separated by separator

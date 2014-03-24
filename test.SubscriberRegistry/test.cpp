@@ -4,6 +4,7 @@
 #include <fstream>
 #include "../SubscriberRegistry.h"
 #include "Configuration.h"
+#include "Utils.h"
 
 using namespace std;
 
@@ -14,15 +15,15 @@ SubscriberRegistry sr;
 
 void foo(uint32_t n, string s)
 {
-	LOG(INFO) << sr.uintToString(n) << " " << s;
+	LOG(INFO) << Utils::uintToString(n) << " " << s;
 }
 
 void foo(string s)
 {
 	uint64_t h;
 	uint64_t l;
-	sr.stringToUint(s, &h, &l);
-	LOG(INFO) << sr.uintToString(h, l) << " " << s;
+	Utils::stringToUint(s, &h, &l);
+	LOG(INFO) << Utils::uintToString(h, l) << " " << s;
 }
 
 int main(int argc, char **argv)
@@ -39,8 +40,8 @@ int main(int argc, char **argv)
 	sr.getIMSI("clid");
 	// test mapping of unknow user (so it won't be found locally)
 	sr.getCLIDLocal("imsi_unknown");
-	sr.getRandForAuthentication(false, "imsi_r1");
-	sr.authenticate(false, "imsi_a1","rand_a1","sres_a1");
+	//sr.getRandForAuthentication(false, "imsi_r1");
+	//sr.authenticate(false, "imsi_a1","rand_a1","sres_a1");
 
 
 	// but test the conversions

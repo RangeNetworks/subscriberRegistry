@@ -29,8 +29,8 @@
 #include <map>
 #include <stdlib.h>
 #include <Logger.h>
-// #include <Timeval.h>
-// #include <Threads.h>
+#include <Timeval.h>
+#include <Threads.h>
 #include <map>
 #include <string>
 #include "sqlite3.h"
@@ -43,6 +43,11 @@ class SubscriberRegistry {
 
 	sqlite3 *mDB;			///< database connection
 	unsigned mNumSQLTries;		///< Number of times to try an sqlite command before giving up.
+
+#ifndef SR_API_ONLY
+	mutable Mutex mLock;	///< control for multithreaded read/write access to the memory based sip_buddies table
+	Thread mSyncer;			///< thread responsible for synchronizing the memory and disk based sip_buddies tables
+#endif
 
 	public:
 
@@ -68,6 +73,28 @@ class SubscriberRegistry {
 	}
 
 
+	/**
+		Grab the memory based sqlite db as a table string
+	*/
+	string getResultsAsString(string query);
+
+	/**
+		Grab the columns from a table
+	*/
+	vector<string> getTableColumns(string tableName);
+
+#ifndef SR_API_ONLY
+	/**
+		Generate the SQL query which is used to sync the in-memory database to disk
+		to account for differences in database schemas.
+	*/
+	string generateSyncToDiskQuery();
+
+	/**
+		Sync the in-memory sip_buddies table to disk.
+	*/
+	bool syncMemoryDB();
+#endif
 
 	/**
 		Resolve an ISDN or other numeric address to an IMSI.
@@ -102,19 +129,31 @@ class SubscriberRegistry {
 	char* getRegistrationIP(const char* IMSI);
 
 	/**
-		Set a specific variable indexed by imsi from sip_buddies
-		@param imsi The user's IMSI or SIP username.
-		@param key to index into table
+		Get a subscriber's property.
+		@param imsi imsi of the subscriber
+		@param key name of the property
 	*/
 	string imsiGet(string imsi, string key);
 
+#ifndef SR_API_ONLY
 	/**
-		Set a specific variable indexed by imsi_from sip_buddies
-		@param imsi The user's IMSI or SIP username.
-		@param key to index into table
-		@param value to set indexed by the key
+		Set a subscriber's property.
+		@param imsi imsi of the subscriber
+		@param key name of the property
+		@param value value of the property
 	*/
 	bool imsiSet(string imsi, string key, string value);
+
+	/**
+		Set a subscriber's property.
+		@param imsi imsi of the subscriber
+		@param key1 name of the property
+		@param value1 value of the property
+		@param key2 name of the property
+		@param value2 value of the property
+	*/
+	bool imsiSet(string imsi, string key1, string value1, string key2, string value2);
+#endif
 
 	/**
 		Add a new user to the SubscriberRegistry.
@@ -141,99 +180,6 @@ class SubscriberRegistry {
 	char *mapCLIDGlobal(const char *local);
 
 
-
-	/**
-		Get a 128-bit number for authentication.
-		@param sip sip server (true) or http
-		@param IMSI The user's IMSI or SIP username.
-		@return the 128-bit number in hex
-	*/
-	string getRandForAuthentication(bool sip, string IMSI);
-
-
-	/**
-		Get a 128-bit number for authentication.
-		@param sip sip server (true) or http
-		@param IMSI The user's IMSI or SIP username;
-		@param hRAND upper 64 bits
-		@param lRAND lower 64 bits
-	*/
-	bool getRandForAuthentication(bool sip, string IMSI, uint64_t *hRAND, uint64_t *lRAND);
-
-	void stringToUint(string strRAND, uint64_t *hRAND, uint64_t *lRAND);
-
-	string uintToString(uint64_t h, uint64_t l);
-
-	string uintToString(uint32_t x);
-
-	SubscriberRegistry::Status authenticate(bool sip, string IMSI, uint64_t hRAND, uint64_t lRAND, uint32_t SRES);
-
-
-
-	/**
-		Authenticate a handset.
-		@param sip sip server (true) or http
-		@param IMSI The user's IMSI or SIP username.
-		@param rand RAND.
-		@param sres SRES
-		@return ok or fail
-	*/
-	SubscriberRegistry::Status authenticate(bool sip, string IMSI, string rand, string sres);
-
-
-
-	bool useGateway(const char* ISDN);
-
-
-	/**
-		Set whether a subscriber is prepaid.
-		@param IMSI Subscriber's IMSI
-		@param yes true for prepaid, false for postpaid
-		@return SUCCESS or FAILURE
-	*/
-	Status setPrepaid(const char *IMSI, bool yes);
-
-
-	/**
-		Is a subscriber postpaid?
-		@param IMSI Subscriber's IMSI
-		@param yes set to true if subscriber is postpaid, false if prepaid
-		@return SUCCESS or FAILURE
-	*/
-	Status isPrepaid(const char *IMSI, bool &yes);
-
-
-	/**
-		Get the balance remaining in a subscriber's account.
-		@param IMSI Subscriber's IMSI
-		@param balance current account balance
-		@return SUCCESS or FAILURE
-	*/
-	Status balanceRemaining(const char *IMSI, int &balance);
-
-
-	/**
-		Atomic operation to add to the account balance
-		@param IMSI subscriber's IMSI
-		@param moneyToAdd money to add (negative to subtract)
-		@return SUCCESS or FAILURE
-	*/
-	Status addMoney(const char *IMSI, int moneyToAdd);
-
-	/**
-		Return the number of "units" of a particular transcation type available in the user's account.
-		@param IMSI subscriber's IMSI
-		@param service the service type
-		@param units number of units of this service type remaining
-		@return SUCCESS or FAILURE
-	*/
-	Status serviceUnits(const char *IMSI, const char* service, int &units);
-
-	/**
-		Return the cost per unit of a specific service type.
-	*/
-	int serviceCost(const char* service);
-
 	/**
 		Update the RRLP location for user
 		@param name IMSI to be updated
@@ -258,15 +204,6 @@ class SubscriberRegistry {
 
 
 	/**
-		Run sql statments over http.
-		@param stmt The sql statements.
-		@param resultptr Set this to point to the result of executing the statements.
-	*/
-	Status sqlHttp(const char *stmt, char **resultptr);
-
-
-
-	/**
 		Run an sql query (select unknownColumn from table where knownColumn = knownValue).
 		@param unknownColumn The column whose value you want.
 		@param table The table to look in.
@@ -284,82 +221,10 @@ class SubscriberRegistry {
 	Status sqlUpdate(const char *stmt);
 
 
-
-
-
-
-
-
 };
 
-
-
-/** Class that SubscriberRegistry uses to setup an http query, run it, and get the results. */
-class HttpQuery {
-
-
-
-	public:
-
-
-
-	/**
-		Constructor.
-		@param req The type of http query (sql, (get a)rand(om number) auth(enticate), etc).
-	*/
-	HttpQuery(const char *req);
-
-
-
-	/**
-		Specify a parameter to send in the http query.
-		@param label The label or name for the parameter.
-		@param value The value of the parameter.
-	*/
-	void send(const char *label, string value);
-
-
-
-	/**
-		Log the query.
-		*/
-	void log();
-
-
-	/**
-		This runs the http query.
-		@param sip Whether to call the sip server as opposed to the http server.
-	*/
-	bool http(bool sip);
-
-
-
-	/**
-		Get result from the http query.
-		@param label The label or name of the parameter whose value you want.
-	*/
-	const char *receive(const char *label);
-
-
-
-
-
-	private:
-
-
-
-	/** stores the parameters to send. */
-	map<string,string> sends;
-
-
-
-	/** stores the return parameters. */
-	map<string,string> receives;
-
-
-
-};
-
+/** Periodically triggers SubscriberRegistry::syncMemoryDB(). */
+void* subscriberRegistrySyncer(void*);
 
 
 #endif
