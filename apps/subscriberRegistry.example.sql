@@ -1,6 +1,6 @@
 --
 -- This file was generated using: ./sipauthserve --gensql
--- binary version: release 4.0TRUNK built Nov 20 2013 rev6847M 
+-- binary version: release 4.0TRUNK built Mar 25 2014 rev CommonLibs:rev 
 --
 -- Future changes should not be put in this file directly but
 -- rather in the program's ConfigurationKey schema.
