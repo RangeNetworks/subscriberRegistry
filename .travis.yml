@@ -5,6 +5,7 @@ git:
   submodules: false
 
 before_install:
+ - sudo apt-get install -qq libosip2-dev
  - git clone https://github.com/RangeNetworks/libzmq.git
  - cd libzmq
  - ./build.sh
