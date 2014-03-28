@@ -1,6 +1,9 @@
 language: cpp
 compiler: gcc
 
+notifications:
+  irc: "chat.freenode.net#openbts"
+
 git:
   submodules: false
 
