@@ -1,11 +1,15 @@
 language: cpp
 compiler: gcc
 
-#before_install:
-# - sudo apt-get install -qq libxyz
+git:
+  submodules: false
 
-install:
-  - git submodule update --init --recursive
+before_install:
+ - sed -i 's/git@github.com:/git:\/\/github.com\//' .gitmodules
+ - git submodule update --init --recursive
+
+#install:
+#  - sh bootstrap.sh
 
 script:
   - dpkg-buildpackage -ai386
