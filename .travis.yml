@@ -17,5 +17,5 @@ before_install:
 #  - sh bootstrap.sh
 
 script:
-  - dpkg-buildpackage -ai386
+  - dpkg-buildpackage
 
