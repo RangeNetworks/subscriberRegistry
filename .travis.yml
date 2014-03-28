@@ -1,0 +1,12 @@
+language: cpp
+compiler: gcc
+
+#before_install:
+# - sudo apt-get install -qq libxyz
+
+install:
+  - git submodule update --init --recursive
+
+script:
+  - dpkg-buildpackage -ai386
+
