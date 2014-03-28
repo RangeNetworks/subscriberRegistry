@@ -488,7 +488,6 @@ SubscriberRegistry::Status SubscriberRegistry::sqlLocal(const char *query, char 
 }
 
 
-
 char *SubscriberRegistry::sqlQuery(const char *unknownColumn, const char *table, const char *knownColumn, const char *knownValue)
 {
 	char *result = NULL;
@@ -507,6 +506,31 @@ char *SubscriberRegistry::sqlQuery(const char *unknownColumn, const char *table,
 	return NULL;
 }
 
+
+/*
+ * Check for two of the same values for a single unknown
+ */
+char *SubscriberRegistry::sqlQuery2(const char *unknownColumn, const char *table, const char *knownColumn, const char *knownValue1, const char *knownValue2)
+{
+	char *result = NULL;
+	SubscriberRegistry::Status st;
+	ostringstream os;
+	// select knownValue from table where knownColumn IN ('knownValue1', 'knownValue2')
+	os << "select " << unknownColumn << " from " << table << " where " << knownColumn << " IN (\'"
+			<< knownValue1 << "\', " << "\'" << knownValue2 << "\')";
+	//LOG(INFO) << "QUERY STRING = " << os.str().c_str();
+
+	// try to find locally
+	st = sqlLocal(os.str().c_str(), &result);
+	if ((st == SUCCESS) && result) {
+		// got it.  return it.
+		LOG(INFO) << "result = " << result;
+		return result;
+	}
+	// didn't find locally
+	LOG(INFO) << "not found: " << os.str();
+	return NULL;
+}
 
 
 SubscriberRegistry::Status SubscriberRegistry::sqlUpdate(const char *stmt)
@@ -554,6 +578,10 @@ bool SubscriberRegistry::imsiSet(string imsi, string key1, string value1, string
 }
 #endif
 
+/*
+ * Get IMSI from phone number
+ * Should be able to get rid of this one
+*/
 char *SubscriberRegistry::getIMSI(const char *ISDN)
 {
 	if (!ISDN) {
@@ -564,6 +592,33 @@ char *SubscriberRegistry::getIMSI(const char *ISDN)
 	return sqlQuery("dial", "dialdata_table", "exten", ISDN);
 }
 
+
+/*
+ * This version handle phone number with or without a plus at the beginning
+ * This should work for all uses of getIMSI
+ *
+ */
+char *SubscriberRegistry::getIMSI2(const char *ISDN)
+{
+	if (!ISDN) {
+		LOG(WARNING) << "SubscriberRegistry::getIMSI2 attempting lookup of NULL ISDN";
+		return NULL;
+	}
+	LOG(INFO) << "getIMSI2(" << ISDN << ")";
+	char* str2;
+	char localstr[50];
+	if (ISDN[0] == '+') {
+		str2 =  (char *) &ISDN[1];  // ISDN has plus remove plus for str2
+	} else  {
+		// ISDN no plus  add plus to str2
+		strcpy(&localstr[0], "+");
+		strncat(localstr, ISDN, sizeof(localstr)-1);
+		localstr[sizeof(localstr)-1] = 0;
+		str2 = localstr;
+	}
+	// Two strings one with plus one without
+	return sqlQuery2("dial", "dialdata_table", "exten", ISDN, (const char*) str2);
+}
 
 
 char *SubscriberRegistry::getCLIDLocal(const char* IMSI)
@@ -672,7 +727,7 @@ char *SubscriberRegistry::mapCLIDGlobal(const char *local)
 		return NULL;
 	}
 	LOG(INFO) << "mapCLIDGlobal(" << local << ")";
-	char *IMSI = getIMSI(local);
+	char *IMSI = getIMSI2(local);
 	if (!IMSI) return NULL;
 	char *global = getCLIDGlobal(IMSI);
 	free(IMSI);

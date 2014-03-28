@@ -103,6 +103,7 @@ class SubscriberRegistry {
 			NULL if the ISDN cannot be resolved.
 	*/
 	char* getIMSI(const char* ISDN);
+	char* getIMSI2(const char *ISDN); // This version works with a plus
 
 	/**
 		Given an IMSI, return the local CLID, which should be a numeric address.
@@ -212,6 +213,16 @@ class SubscriberRegistry {
 	*/
 	char *sqlQuery(const char *unknownColumn, const char *table, const char *knownColumn, const char *knownValue);
 
+
+	/**
+			Run an sql query (select unknownColumn from table where knownColumn = knownValue).
+			@param unknownColumn The column whose value you want.
+			@param table The table to look in.
+			@param knownColumn The column with the value you know.
+			@param knownValue1 The first known value of knownColumn.
+			@param knownValue2 The second known value of knownColumn.
+	*/
+	char *sqlQuery2(const char *unknownColumn, const char *table, const char *knownColumn, const char *knownValue1, const char *knownValue2);
 
 
 	/**
