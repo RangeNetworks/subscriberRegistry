@@ -20,12 +20,13 @@ export DH_ALWAYS_EXCLUDE=.svn:.git
 export DH_OPTIONS
 
 configure:
-	./autogen.sh # --verbose
+	./autogen.sh
 
 config: configure-stamp
 configure-stamp: configure
 	dh_testdir
 	# Add here commands to configure the package.
+	./configure $(confflags)
 	touch configure-stamp
 
 #Architecture
@@ -84,8 +85,8 @@ install-arch:
 binary-common:
 	dh_testdir
 	dh_testroot
-#	dh_installchangelogs ChangeLog
-#	dh_installdocs
+	dh_installchangelogs ChangeLog
+	dh_installdocs
 #	dh_installexamples
 #	dh_installmenu
 #	dh_installdebconf	

@@ -1,4 +1,4 @@
-Source: sipauthserve
+Source: sipauthserve-public
 Section: comm
 Priority: optional
 Maintainer: Range Networks, Inc. <info@rangenetworks.com>
@@ -6,7 +6,8 @@ Homepage: http://www.rangenetworks.com/
 Build-Depends: build-essential, debhelper (>= 7), libsqlite3-dev, libosip2-dev, pkg-config, autoconf, libtool, libzmq3-dev, libzmq3
 Standards-Version: 3.7.3
 
-Package: sipauthserve
+Package: sipauthserve-public
+Provides: sipauthserve
 Section: comm
 Priority: optional
 Architecture: any
