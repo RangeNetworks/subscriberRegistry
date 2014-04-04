@@ -202,7 +202,7 @@ char *processBuffer(char *buffer)
 	} else if (gConfig.defines("SubscriberRegistry.IgnoreAuthentication")) {
                 osip_message_set_status_code (response, 200);
                 osip_message_set_reason_phrase (response, osip_strdup("OK"));
-                LOG(INFO) << "success, registering for IP address " << remote_host;
+                LOG(INFO) << "success, imsi " << imsi << " registering for IP address " << remote_host;
                 gSubscriberRegistry.imsiSet(imsi,"ipaddr", remote_host, "port", remote_port);
 	} else {
 		// look for rand and sres in Authorization header (assume imsi same as in from)
@@ -231,7 +231,7 @@ char *processBuffer(char *buffer)
 			LOG(INFO) << "sres = /" << SRES << "/";
 		}
 		if (!RAND || !SRES) {
-			LOG(NOTICE) << "imsi known, 1st register";
+			LOG(NOTICE) << "imsi " << imsi << " known, 1st register";
 			// no rand and sres => 401 Unauthorized
 			osip_message_set_status_code (response, 401);
 			osip_message_set_reason_phrase (response, osip_strdup("Unauthorized"));
@@ -249,7 +249,7 @@ char *processBuffer(char *buffer)
 		} else {
 			string kc;
 			bool sres_good = authenticate(imsi, RAND, SRES, &kc);
-			LOG(INFO) << "imsi known, 2nd register, good = " << sres_good;
+			LOG(INFO) << "imsi " << imsi << " known, 2nd register, good = " << sres_good;
 			if (sres_good) {
 				// sres matches rand => 200 OK
 				osip_message_set_status_code (response, 200);
