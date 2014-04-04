@@ -80,7 +80,7 @@ ConfigurationKeyMap getConfigurationKeys()
 		ConfigurationKey::PORT,
 		"",
 		false,
-		"Port used by the SIP Authentication Server. NOTE: In some older releases (pre-2.8.1) this is called SIP.myPort."
+		"Port used by the SIP Authentication Server."
 	);
 	map[tmp->getName()] = *tmp;
 	delete tmp;
