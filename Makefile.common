@@ -1,5 +1,6 @@
 #
 # Copyright 2008 Free Software Foundation, Inc.
+# Copyright 2014 Range Networks, Inc.
 #
 # This software is distributed under the terms of the GNU Public License.
 # See the COPYING file in the main directory for details.
@@ -26,7 +27,6 @@ AM_CXXFLAGS = -Wall -pthread -ldl
 
 COMMON_INCLUDEDIR = $(top_srcdir)/CommonLibs
 GLOBALS_INCLUDEDIR = $(top_srcdir)/Globals
-SQLITE_INCLUDEDIR = $(top_srcdir)/sqlite3
 NODEMANAGER_INCLUDEDIR = $(top_srcdir)/NodeManager
 JSONBOX_INCLUDEDIR = $(top_srcdir)/NodeManager/JsonBox-0.4.3/include
 JSONDB_INCLUDEDIR = $(top_srcdir)/NodeManager/JSONDB
@@ -39,13 +39,11 @@ STD_DEFINES_AND_INCLUDES = \
 	-I$(GLOBALS_INCLUDEDIR) \
 	-I$(NODEMANAGER_INCLUDEDIR) \
 	-I$(JSONBOX_INCLUDEDIR) \
-	-I$(JSONDB_INCLUDEDIR) \
-	-I$(SQLITE_INCLUDEDIR)
+	-I$(JSONDB_INCLUDEDIR)
 
 # These macros are referenced in apps/Makefile.am, which must be changed in sync with these.
 COMMON_LA = $(top_builddir)/CommonLibs/libcommon.la
 GLOBALS_LA = $(top_builddir)/Globals/libglobals.la
 NODEMANAGER_LA = $(top_builddir)/NodeManager/libnodemanager.la -lzmq
-SQLITE_LA = $(top_builddir)/sqlite3/libsqlite.la -ldl
 
 MOSTLYCLEANFILES = *~

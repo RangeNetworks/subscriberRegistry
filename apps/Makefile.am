@@ -1,5 +1,5 @@
 #
-# Copyright 2013 Range Networks, Inc.
+# Copyright 2013, 2014 Range Networks, Inc.
 #
 # This software is distributed under the terms of the GNU Public License.
 # See the COPYING file in the main directory for details.
@@ -25,7 +25,6 @@ DESTDIR :=
 ourlibs = \
 	$(GLOBALS_LA) \
 	$(COMMON_LA) \
-	$(SQLITE_LA) \
 	$(NODEMANAGER_LA)
 
 bin_PROGRAMS = sipauthserve comp128

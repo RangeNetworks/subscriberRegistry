@@ -1,6 +1,6 @@
 /**@file Global system parameters. */
 /*
-* Copyright 2013 Range Networks, Inc.
+* Copyright 2013, 2014 Range Networks, Inc.
 *
 * This software is distributed under multiple licenses;
 * see the COPYING file in the main directory for licensing
@@ -22,4 +22,4 @@
 #include "config.h"
 #include <Globals.h>
 
-const char *gVersionString = "release " VERSION " built " TIMESTAMP_ISO " " REPO_REV " ";
+const char *gVersionString = "release " VERSION "+" REPO_REV " built " TIMESTAMP_ISO " ";

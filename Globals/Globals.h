@@ -1,6 +1,6 @@
 /**@file Global system parameters. */
 /*
-* Copyright 2013 Range Networks, Inc.
+* Copyright 2013, 2014 Range Networks, Inc.
 *
 * This software is distributed under multiple licenses;
 * see the COPYING file in the main directory for licensing
