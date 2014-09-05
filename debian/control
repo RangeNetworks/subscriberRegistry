@@ -1,16 +1,17 @@
-Source: sipauthserve
+Source: sipauthserve-public
 Section: comm
 Priority: optional
 Maintainer: Range Networks, Inc. <info@rangenetworks.com>
 Homepage: http://www.rangenetworks.com/
-Build-Depends: build-essential, debhelper (>= 7), libosip2-dev, pkg-config, autoconf, libtool
+Build-Depends: build-essential, debhelper (>= 7), libosip2-dev, pkg-config, autoconf, libtool, libcoredumper1, libcoredumper-dev
 Standards-Version: 3.7.3
 
-Package: sipauthserve
+Package: sipauthserve-public
+Provides: sipauthserve
 Section: comm
 Priority: optional
 Architecture: any
 Essential: no
-Depends: sqlite3, libosip2-4, libc6, pkg-config, range-libzmq
+Depends: sqlite3, libosip2-4, libc6, pkg-config, libzmq1, supervisor
 Description: Range Networks - SIP Authorization Server
 
