@@ -26,7 +26,6 @@ config: configure-stamp
 configure-stamp: configure
 	dh_testdir
 	# Add here commands to configure the package.
-	autoreconf -i
 	./configure $(confflags)
 	touch configure-stamp
 
@@ -34,28 +33,28 @@ configure-stamp: configure
 build: config build-arch build-indep
 
 build-arch: build-arch-stamp
-build-arch-stamp: 
+build-arch-stamp: configure-stamp  
 	# Add here commands to compile the arch part of the package.
 	#$(MAKE)
 	touch $@
 
 build-indep: build-indep-stamp
-build-indep-stamp: 
+build-indep-stamp: configure-stamp  
 	# Add here commands to compile the indep part of the package.
 	#$(MAKE) doc
 	touch $@
 
-clean: 
+clean: config
 	dh_testdir
 	dh_testroot
+	rm -f build-arch-stamp build-indep-stamp configure-stamp
 
 	# Add here commands to clean up after the build process.
 	$(MAKE) clean
 
-	# dh_clean deletes toplevel *-stamp files
 	dh_clean 
 
-install: install-arch install-indep
+install: install-indep install-arch
 install-indep:
 	dh_testdir
 	dh_testroot
@@ -65,7 +64,7 @@ install-indep:
 	# Add here commands to install the indep part of the package into
 	# debian/<package>-doc.
 	#INSTALLDOC#
-	dh_auto_test # runs 'make check'
+
 	dh_install -i
 
 install-arch:
