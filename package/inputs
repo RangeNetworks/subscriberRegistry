@@ -1,0 +1,8 @@
+usr/local/bin/hexmapper
+usr/local/bin/syslogextractor
+usr/local/sbin/comp128
+usr/local/sbin/sipauthserve
+etc/OpenBTS/sipauthserve.example.sql
+OpenBTS/comp128
+OpenBTS/sipauthserve
+var/lib/asterisk/sqlite3dir

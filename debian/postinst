@@ -19,29 +19,22 @@ set -e
 
 configure()
 {
+WEBUSER=www-data
 DATE=$(date --rfc-3339='date')
-CONFIG_BACKUP=/etc/OpenBTS/OpenBTS.dump-$DATE
 
-
+CONFIG_BACKUP=/etc/OpenBTS/sipauthserve.dump-$DATE
 if [ ! -e $CONFIG_BACKUP ]; then
-        sqlite3 /etc/OpenBTS/OpenBTS.db ".dump" > $CONFIG_BACKUP
+        sqlite3 /etc/OpenBTS/sipauthserve.db ".dump" > $CONFIG_BACKUP
 fi
 
-sqlite3 /etc/OpenBTS/OpenBTS.db ".read /etc/OpenBTS/subscriberRegistry.example.sql" > /dev/null 2>&1
-
-if [ ! -d /var/lib/asterisk/sqlite3dir ]; then
-	mkdir -p /var/lib/asterisk/sqlite3dir
-fi
+sqlite3 /etc/OpenBTS/sipauthserve.db ".read /etc/OpenBTS/sipauthserve.example.sql" > /dev/null 2>&1
 
 SRPATH=/var/lib/asterisk/sqlite3dir/sqlite3.db
-
-DATE=$(date --rfc-3339='date')
-SR_CONFIG_BACKUP=$SRPATH.dump-$DATE
-
+SR_BACKUP=$SRPATH.dump-$DATE
 
 if [[ -e $SRPATH && "`sqlite3 $SRPATH "PRAGMA table_info(sip_buddies)" || true`" != "" ]]; then
-	if [ ! -e $SR_CONFIG_BACKUP ]; then
-		sqlite3 $SRPATH ".dump" > $SR_CONFIG_BACKUP
+	if [ ! -e $SR_BACKUP ]; then
+		sqlite3 $SRPATH ".dump" > $SR_BACKUP
 	fi
 
 	HASPREPAID=`sqlite3 $SRPATH "PRAGMA table_info(sip_buddies)" | grep prepaid || true`
@@ -61,15 +54,10 @@ if [[ -e $SRPATH && "`sqlite3 $SRPATH "PRAGMA table_info(sip_buddies)" || true`"
 	sqlite3 $SRPATH "insert or ignore into 'rates' values ('out-of-network-call', 1)"
 fi
 
-
-# set up permissions for webui, temporary fix until ui is replumbed to use json
 # directory permissions
-chown -R root:www-data /var/lib/asterisk/sqlite3dir
-chmod 775 /var/lib/asterisk/sqlite3dir/
-if [ -e /var/lib/asterisk/sqlite3dir/sqlite3.db ]; then
-	chmod 664 /var/lib/asterisk/sqlite3dir/sqlite3*
-fi
-
+chown -R root:${WEBUSER} /var/lib/asterisk/sqlite3dir
+chmod -R ug+rw /var/lib/asterisk/sqlite3dir/
+chmod -R o-w /var/lib/asterisk/sqlite3dir/
 }
 
 case "$1" in

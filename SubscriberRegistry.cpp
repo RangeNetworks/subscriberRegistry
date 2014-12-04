@@ -719,7 +719,6 @@ SubscriberRegistry::Status SubscriberRegistry::addUser(const char* IMSI, const c
 }
 
 
-
 char *SubscriberRegistry::mapCLIDGlobal(const char *local)
 {
 	if (!local) {

@@ -21,18 +21,17 @@
 
 include $(top_srcdir)/Makefile.common
 
-DESTDIR := 
-
-AM_CPPFLAGS = $(STD_DEFINES_AND_INCLUDES) $(WITH_INCLUDES)
-AM_CXXFLAGS = -Wall -pthread -ldl
+DESTDIR ?= 
+# must be kept in sync with AC_CONFIG_MACRO_DIR in configure.ac
+ACLOCAL_AMFLAGS = -I config
 
 noinst_LTLIBRARIES = libSR.la
 
 libSR_la_SOURCES = \
-	SubscriberRegistry.cpp
+	SubscriberRegistry.cpp 
 
 noinst_HEADERS = \
-	SubscriberRegistry.h
+	SubscriberRegistry.h 
 
 # Order must be preserved
 SUBDIRS = \
@@ -41,11 +40,5 @@ SUBDIRS = \
 	Globals \
 	NodeManager \
 	apps
-
-install: all
-	$(MAKE) -C ./apps install
-
-dox: FORCE
-	doxygen doxconfig
 
 FORCE:

@@ -1,0 +1,3 @@
+var/lib/asterisk/sqlite3dir
+etc/OpenBTS
+OpenBTS

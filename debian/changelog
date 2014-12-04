@@ -1,5 +1,5 @@
-sipauthserve (5.0) unstable; urgency=low
+sipauthserve (5.0-master) unstable; urgency=low
 
     * Test
 
- -- Donald C. Kirker <donald.kirker@rangenetworks.com>  Mon, 22 Apr 2013 00:11:00 -0700
+ -- Range Packager <buildmeister@rangenetworks.com>  Thu, 25 Sep 2014 00:17:42 -0700

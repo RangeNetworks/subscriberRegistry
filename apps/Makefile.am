@@ -27,31 +27,24 @@ ourlibs = \
 	$(COMMON_LA) \
 	$(NODEMANAGER_LA)
 
-bin_PROGRAMS = sipauthserve comp128
+sbin_PROGRAMS = sipauthserve comp128
+bin_SCRIPTS = syslogextractor hexmapper 
+confdir = /etc/OpenBTS
+conf_DATA = sipauthserve.example.sql 
 
-sipauthserve_SOURCES =  sipauthserve.cpp ../servershare.cpp ../SubscriberRegistry.cpp \
+sipauthserve_SOURCES =  sipauthserve.cpp \
+	../servershare.cpp \
+	../SubscriberRegistry.cpp \
 	../NodeManager/JSONDB/JSONDB.cpp
-sipauthserve_CPPFLAGS = $(STD_DEFINES_AND_INCLUDES)
 sipauthserve_LDADD = $(ourlibs) -losipparser2 -losip2
 
-comp128_SOURCES =  comp128.c
-comp128_CPPFLAGS = $(STD_DEFINES_AND_INCLUDES)
+comp128_SOURCES = comp128.c
 comp128_LDADD = $(ourlibs)
 
-EXTRA_DIST = \
-	subscriberRegistry.example.sql \
-	sipauthserve.conf
+sipauthserve.example.sql: sipauthserve
+	( ./sipauthserve --gensql > sipauthserve.example.sql || true )
 
-# Populating comp128 in both locations for backwards compat
-install: sipauthserve comp128
-	mkdir -p "$(DESTDIR)/OpenBTS/"
-	install comp128 "$(DESTDIR)/OpenBTS/"
-	install sipauthserve "$(DESTDIR)/OpenBTS/"
-	mkdir -p "$(DESTDIR)/usr/local/bin/"
-	install comp128 "$(DESTDIR)/usr/local/bin/"
-	install syslogextractor "$(DESTDIR)/usr/local/bin/"
-	install hexmapper "$(DESTDIR)/usr/local/bin/"
-	mkdir -p "$(DESTDIR)/etc/init/"
-	install sipauthserve.conf "$(DESTDIR)/etc/init/"
-	mkdir -p "$(DESTDIR)/etc/OpenBTS/"
-	install subscriberRegistry.example.sql "$(DESTDIR)/etc/OpenBTS/"
+tmp_DB = /tmp/SR.db
+TESTS = checkdb.sh
+CLEANFILES = $(tmp_DB)
+
