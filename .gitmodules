@@ -4,7 +4,7 @@
 	branch = master
 [submodule "NodeManager"]
 	path = NodeManager
-	url = git@github.com:RangeNetworks/NodeManager.git
+	url = git@github.com:endaga/NodeManager.git
 	branch = master
 [submodule "CommonLibs"]
 	path = CommonLibs
