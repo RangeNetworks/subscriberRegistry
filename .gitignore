@@ -35,7 +35,4 @@ ltmain.sh
 stamp-h1
 apps/comp128
 apps/sipauthserve
-apps/subscriberRegistry.example.sql
-apps/sipauthserve.example.sql
-sipauthserve.example.sql
 package/tmp
