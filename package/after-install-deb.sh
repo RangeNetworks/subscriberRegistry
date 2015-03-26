@@ -73,7 +73,6 @@ config() {
 	fi
 	set -e
 
-	chown -R asterisk:${WEBGROUP} ${SR_PATH}
 	chmod -R ug+rw ${SR_PATH}
 	chmod -R o-w ${SR_PATH}
 }

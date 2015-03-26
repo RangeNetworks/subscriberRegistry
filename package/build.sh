@@ -44,7 +44,7 @@ function get_linux_flavor() {
 
 
 echo == Building SIPAuthServe package
-srcrepodir='COMMERCIAL-subscriberRegistry'
+srcrepodir='subscriberRegistry'
 builddir='package/tmp'
 here=`pwd`
 dirname=`basename ${here}`
@@ -88,9 +88,9 @@ cp package/*.sh ${builddir}/package/
 cp package/inputs ${builddir}/package/
 
 case "${OS_FLAVOR}" in
-ubuntu) mkdir ${builddir}/deb
+ubuntu) mkdir -p ${builddir}/deb
     ;;
-centos) mkdir ${builddir}/rpm
+centos) mkdir -p ${builddir}/rpm
     ;;
 *) exit 1
 	;;
@@ -108,15 +108,18 @@ cd ${builddir}/build
 mkdir -p var/lib/asterisk/sqlite3dir
 mkdir -p OpenBTS
 cd OpenBTS
-ln -s ../usr/local/sbin/comp128
-ln -s ../usr/local/sbin/sipauthserve
+# Move the sipauthserve binary and the example generated sql.
+# TODO(matt): put these lines in a more logical place in this script..
+cp sipauthserve ../usr/local/bin
+cp ${here}/apps/sipauthserve.example.sql ../etc/OpenBTS
 cd ${here}
 echo
 
 echo " # creating a package:"
 BUILDREPOREV=`git rev-parse --short=10 HEAD`
 case "${OS_FLAVOR}" in
-ubuntu)	fpm -s dir -t deb -n sipauthserve -C ${builddir}/build \
+ubuntu)
+  fpm -s dir -t deb -n sipauthserve -C ${builddir}/build \
 	-p ${packagedir}/sipauthserve_VERSION-sha1.${BUILDREPOREV}_ARCH.deb \
 	--description 'Range Networks - SIP Authorization Server' \
 	--version ${BUILDVERSION} \
@@ -135,7 +138,6 @@ ubuntu)	fpm -s dir -t deb -n sipauthserve -C ${builddir}/build \
 	--deb-upstart ${here}/debian/sipauthserve.upstart \
 	--deb-priority 'optional' \
 	--workdir ${here}/${builddir}/deb \
-	--inputs package/inputs
 #	--verbose
     ;;
 centos)
