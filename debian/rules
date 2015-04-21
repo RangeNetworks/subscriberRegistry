@@ -73,6 +73,7 @@ install-arch:
 
 	# Add here commands to install the arch part of the package into
 	# debian/{package}.
+	$(MAKE) check
 	$(MAKE) DESTDIR=$(CURDIR)/debian/sipauthserve install
 
 	dh_install -s
