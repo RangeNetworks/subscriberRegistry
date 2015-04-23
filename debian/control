@@ -7,7 +7,7 @@ Build-Depends: build-essential, debhelper (>= 7), libsqlite3-dev, libosip2-dev, 
 Standards-Version: 3.7.3
 
 Package: sipauthserve-public
-Provides: sipauthserve-public
+Provides: sipauthserve
 Section: comm
 Priority: optional
 Architecture: any
