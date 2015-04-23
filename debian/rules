@@ -98,7 +98,7 @@ binary-common:
 #	dh_installcron
 #	dh_installinfo
 	dh_installman
-	dh_link
+#       dh_link
 #	dh_strip
 	dh_compress
 	dh_fixperms
