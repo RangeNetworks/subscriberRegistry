@@ -12,6 +12,6 @@ Section: comm
 Priority: optional
 Architecture: any
 Essential: no
-Depends: sqlite3, libosip2-dev, libc6, pkg-config, libzmq1, supervisor
+Depends: sqlite3, libosip2-dev, libc6, pkg-config, libzmq1, supervisor, libcoredumper1
 Description: Endaga - SIP Authorization Server
 
