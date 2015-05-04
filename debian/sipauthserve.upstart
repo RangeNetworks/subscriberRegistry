@@ -1,4 +1,0 @@
-[program:sipauthserve]
-command=sudo ./sipauthserve
-directory=/OpenBTS/
-
