@@ -1,5 +1,5 @@
-sipauthserve (5.0) unstable; urgency=low
+sipauthserve-public (5.0) unstable; urgency=low
 
-    * Test
+  * Test
 
  -- Range Packager <buildmeister@rangenetworks.com>  Thu, 25 Sep 2014 00:17:42 -0700

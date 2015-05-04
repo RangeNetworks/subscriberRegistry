@@ -656,6 +656,17 @@ char *SubscriberRegistry::getRegistrationIP(const char* IMSI)
 }
 
 
+char *SubscriberRegistry::getRegistrationPort(const char* IMSI)
+{
+	if (!IMSI) {
+		LOG(WARNING) << "SubscriberRegistry::getRegistrationPort attempting lookup of NULL IMSI";
+		return NULL;
+	}
+	LOG(INFO) << "getRegistrationPort(" << IMSI << ")";
+	return sqlQuery("port", "sip_buddies", "username", IMSI);
+}
+
+
 
 SubscriberRegistry::Status SubscriberRegistry::setRegTime(const char* IMSI)
 {

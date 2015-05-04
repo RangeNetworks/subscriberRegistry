@@ -130,6 +130,15 @@ class SubscriberRegistry {
 	char* getRegistrationIP(const char* IMSI);
 
 	/**
+		Given an IMSI, return the port of the most recent registration.
+		@param IMSI The subscriber IMSI
+		@return A C-string to be freed by the caller, "111.222.333.444:port",
+			NULL if the ISMI isn't registered.
+	*/
+	char* getRegistrationPort(const char* IMSI);
+
+
+	/**
 		Get a subscriber's property.
 		@param imsi imsi of the subscriber
 		@param key name of the property

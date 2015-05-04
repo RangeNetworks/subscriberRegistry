@@ -73,8 +73,8 @@ JsonBox::Object nmHandler(JsonBox::Object& request)
 	std::string command = request["command"].getString();
 	std::string action = request["action"].getString();
 
-	if (command.compare("subscribers") == 0) {
-		request["table"] = JsonBox::Value("subscribers");
+	if (command.compare("subscribers") == 0 || command.compare("sip_buddies") == 0 || command.compare("dialdata_table") == 0) {
+		request["table"] = JsonBox::Value(command);
 		response = gJSONDB.query(request);
 	} else {
 		response["code"] = JsonBox::Value(501);

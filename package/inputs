@@ -1,7 +1,7 @@
 usr/local/bin/hexmapper
 usr/local/bin/syslogextractor
-usr/local/sbin/comp128
-usr/local/sbin/sipauthserve
+usr/local/bin/comp128
+usr/local/bin/sipauthserve
 etc/OpenBTS/sipauthserve.example.sql
 OpenBTS/comp128
 OpenBTS/sipauthserve
